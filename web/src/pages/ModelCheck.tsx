@@ -38,6 +38,7 @@ interface SplitEval {
   label: string; train_days: number | null; test_day: string | null;
   matches_train: number; matches_test: number; minutes: MinuteEval[];
   unified?: ModelInfo; live?: ModelInfo;
+  ranked_model?: { matches: number; shared: Scores; own: Scores; own_vs_shared: Delta; used: boolean };
   segments?: Segment[]; queue_models?: QueueModel[]; every_minute?: EveryMinute | null;
 }
 interface EvalResponse {
@@ -194,6 +195,13 @@ export function ModelCheck() {
                       {f3(cur.models.live.log_loss)}, picks the winner {pct(cur.models.live.accuracy)} of the time.
                     </li>
                   )}
+                  {cur.models.stream && (
+                    <li>
+                      Stream model, used when tracking a match in progress (current per-player stats and objectives
+                      from the live broadcast, without the few fields it lacks): log loss{" "}
+                      {f3(cur.models.stream.log_loss)}, picks the winner {pct(cur.models.stream.accuracy)} of the time.
+                    </li>
+                  )}
                 </ul>
               )}
             </>
@@ -292,7 +300,6 @@ export function ModelCheck() {
             <span className="muted small">
               The full model on each kind of match, all snapshot minutes together. The queue is an input, so the model
               can be more or less sure in each. A match can be in more than one row. The notes below test simple
-              per-minute models; because separate weights win for ranked, the full model keeps its own weights per queue. The notes below test simple
               per-minute models; because separate weights win for ranked, the full model keeps its own weights per queue.
             </span>
             <div className="table-wrap">
@@ -308,6 +315,16 @@ export function ModelCheck() {
                 </tbody>
               </table>
             </div>
+            {sp.ranked_model && (
+              <p className="muted small" style={{ margin: "8px 0 0" }}>
+                <b>A second full model for ranked?</b> A full model trained on ranked matches only, against the shared full
+                model, on {int(sp.ranked_model.matches)} ranked test matches: log loss {f4(sp.ranked_model.own.log_loss)} vs{" "}
+                {f4(sp.ranked_model.shared.log_loss)} (difference {f4(sp.ranked_model.own_vs_shared.delta_log_loss)}, 95% CI{" "}
+                {ci(sp.ranked_model.own_vs_shared)}). {sp.ranked_model.used
+                  ? "It is better, so ranked matches use it."
+                  : "No real difference: the shared model's per-queue weights already capture it, so there is one model."}
+              </p>
+            )}
             {(sp.queue_models ?? []).length > 0 && (
               <ul className="muted small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
                 {sp.queue_models!.map((q) => (
@@ -335,7 +352,9 @@ export function ModelCheck() {
           recalibrated on matches it never trained on. Ranked and unranked matches get their own weights, and ranked
           matches also use the teams' rank gap. <b>Live model</b>: the same, limited to what the live-matches
           API shows during a game (team souls, objectives, heroes, players); it has no kills, deaths or per-player
-          stats. <b>Two ways to test.</b> “Newest day held out” trains on earlier days and tests on the latest, like a
+          stats. <b>Stream model</b>: the full model without the few fields the live broadcast lacks (souls lost on
+          death, total time dead, Mid-Boss claims, last hits, rank gap); it scores a match you track by ID.{" "}
+          <b>Two ways to test.</b> “Newest day held out” trains on earlier days and tests on the latest, like a
           live system would; it's the honest number. “Random 20% of matches” mixes days, so it can look slightly
           better. Either way, no match is in both training and test, and hero and player history comes only from days
           before each match.

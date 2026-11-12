@@ -52,8 +52,10 @@ LIVE_DIFFS = ["souls", "guardians", "walkers", "base_guardians", "shrines", "ope
               "hero_experience", "player_form", "player_farm", "hero_mastery"]
 # The live broadcast stream (/v1/matches/demo/live/query) has current per-player stats and
 # objective state for any match in progress, but not these: souls dropped on death, total
-# time spent dead, Mid-Boss claims, and the lobby's rank averages.
-STREAM_DIFFS = [d for d in DIFFS if d not in {"enemy_souls_lost", "enemy_dead_time", "mid_boss", "rank_gap"}]
+# time spent dead, Mid-Boss claims, and the lobby's rank averages. Its last-hit counter is a
+# different statistic (about 1.6x the lake's creep + neutral kills at the same game time), so
+# last hits are left out too.
+STREAM_DIFFS = [d for d in DIFFS if d not in {"enemy_souls_lost", "enemy_dead_time", "mid_boss", "rank_gap", "last_hits"}]
 FREE = {"momentum", "carry_concentration", "draft_scaling"}      # never constrained
 CONTEXT = ["minute", "total_souls", "stale", "ranked", *FLAGS]   # same for both teams
 P_CLIP = 1e-4

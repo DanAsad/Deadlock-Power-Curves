@@ -5,12 +5,14 @@
 
 The static site has no backend, so web/src/wp/ scores matches in the browser:
 it rebuilds the per-minute rows from the Deadlock API's match metadata and runs
-these exported models. What the browser version does not have:
-  * player history (30-day records per account): those factors are 0 = average
-  * player ranks (not in the API): rank_gap is 0
-The fixtures hold trimmed API responses plus the pipeline's own predictions
-with the same two limits applied, so `npm run test:parity` can check that both
-implementations agree.
+these exported models. What differs in the browser version:
+  * player history comes from each player's public match history (web/src/wp/history.ts)
+    instead of the lake; priors.json carries the constants it needs
+  * player ranks are not in the API: rank_gap is 0
+The fixtures hold trimmed API responses plus the pipeline's own predictions with
+player history and ranks set to 0, so `npm run test:parity` can check that both
+implementations agree without the network. Each fixture also keeps the pipeline's
+player-history factors, for the manual check in web/scripts/history-check.ts.
 """
 import argparse
 import json
@@ -23,11 +25,14 @@ import pandas as pd
 from pipeline.config import DATA_DIR, ROOT
 from pipeline.heroes import UA
 from pipeline.model import CONTEXT, RANKED_ONLY_DIFFS, WinModel
-from pipeline.win_factors import CACHE, SNAP_MIN, hero_priors, pair_priors
+from pipeline.win_factors import (CACHE, EXPERIENCE_CAP, FARM_PRIOR, FORM_PRIOR, HISTORY_DAYS, MASTERY_PRIOR, SNAP_MIN,
+                                  _window, hero_priors, pair_priors)
 
 OUT = DATA_DIR / "web"
 FIXTURES = ROOT / "web" / "src" / "wp" / "fixtures"
-NO_HISTORY = ["hero_experience", "player_form", "player_farm", "hero_mastery", "rank_gap"]   # 0 in the browser
+HISTORY = ["hero_experience", "player_form", "player_farm", "hero_mastery"]
+NO_HISTORY = HISTORY + ["rank_gap"]                    # 0 in the parity fixtures
+MODELS = ["win_model", "win_model_live", "win_model_stream"]
 METADATA_URL = "https://api.deadlock-api.com/v1/matches/{id}/metadata"
 
 
@@ -67,7 +72,15 @@ def priors_json(before: date) -> dict:
     ids = sorted(int(h) for h in wr)
     pairs = lambda M, sym: [[a, b, round(float(M[a, b]), 6)] for a in ids for b in ids
                             if (a < b if sym else a != b) and abs(M[a, b]) > 1e-9]
-    return {"as_of": str(before), "heroes": {str(h): {"scaling": round(float(scale.get(h, 0.0)), 5),
+    from pipeline.extract import MIN_DURATION_S
+    from pipeline.patches import MIN_DAYS_ON_PATCH, load
+    files = _window(before, "ph_")                       # average souls per minute over the same look-back window
+    tot = pd.concat([pd.read_parquet(f, columns=["n", "spm"]).sum().to_frame().T for f in files]).sum() if files else None
+    player = {"avg_spm": round(float(tot["spm"] / max(tot["n"], 1)), 3) if tot is not None else 0.0,
+              "form_prior": FORM_PRIOR, "farm_prior": FARM_PRIOR, "mastery_prior": MASTERY_PRIOR,
+              "experience_cap": EXPERIENCE_CAP, "history_days": HISTORY_DAYS, "min_duration_s": MIN_DURATION_S,
+              "patches": load(), "min_days_on_patch": MIN_DAYS_ON_PATCH}
+    return {"as_of": str(before), "player": player, "heroes": {str(h): {"scaling": round(float(scale.get(h, 0.0)), 5),
                                                       "win_rate": round(float(wr.get(h, 0.5)), 6)} for h in ids},
             "synergy": pairs(S, True), "counter": [p for p in pairs(C, False) if p[0] < p[1]]}
 
@@ -103,10 +116,11 @@ def write_fixtures(match_ids: list[int], models) -> None:
     rows = _compact(data["rows"])
     rows["day"] = rows["match_id"].map(pd.to_datetime(info["start_time"], utc=True).dt.tz_localize(None).dt.normalize())
     df, _ = prepare(rows, data["lists"])
+    history = df.drop_duplicates("match_id").set_index("match_id")[HISTORY]
     df[NO_HISTORY] = 0.0
     df = df.sort_values(["match_id", "minute"]).reset_index(drop=True)
-    full, live = models
-    df["p"], df["p_live"] = full.predict(df), live.predict(df)
+    full, live, stream = models
+    df["p"], df["p_live"], df["p_stream"] = full.predict(df), live.predict(df), stream.predict(df)
     X = full.features(df)
     FIXTURES.mkdir(parents=True, exist_ok=True)
     day = min(pd.Timestamp(d).date() for d in rows["day"].unique())
@@ -116,10 +130,11 @@ def write_fixtures(match_ids: list[int], models) -> None:
         with urllib.request.urlopen(req, timeout=60) as r:
             raw = json.loads(r.read().decode("utf-8"))
         k = (df["match_id"] == mid).to_numpy()
-        expected = [{"minute": int(r.minute), "p": float(r.p), "p_live": float(r.p_live),
+        expected = [{"minute": int(r.minute), "p": float(r.p), "p_live": float(r.p_live), "p_stream": float(r.p_stream),
                      "features": dict(zip(full.feats, _r(x, 7)))} for r, x in zip(df[k].itertuples(), X[k])]
-        (FIXTURES / f"{mid}.json").write_text(json.dumps({"metadata": trim(raw.get("match_info", raw)),
-                                                          "expected": expected}), encoding="utf-8")
+        (FIXTURES / f"{mid}.json").write_text(json.dumps({
+            "metadata": trim(raw.get("match_info", raw)), "expected": expected,
+            "history": {c: round(float(history.loc[mid, c]), 5) for c in HISTORY}}), encoding="utf-8")
         print(f"  fixture {mid}: {int(k.sum())} minutes")
 
 
@@ -128,19 +143,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures", action="store_true", help="also write the parity-test fixtures")
     args = ap.parse_args()
+    import joblib
     full, live, info = load_models()
+    stream = joblib.load(DATA_DIR / "model" / "win_model_stream.joblib")
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, m in (("win_model", full), ("win_model_live", live)):
+    for name, m in zip(MODELS, (full, live, stream)):
         f = OUT / f"{name}.json"
         f.write_text(json.dumps(model_json(m), separators=(",", ":")), encoding="utf-8")
         print(f"wrote {f} ({f.stat().st_size / 1e6:.1f} MB, {len(m.clf._predictors)} trees)")
     pri = priors_json(_latest_cached_day())
-    (OUT / "priors.json").write_text(json.dumps({**pri, "model_held_out_day": info.get("trained_through")},
+    (OUT / "priors.json").write_text(json.dumps({**pri, "models": MODELS, "model_held_out_day": info.get("trained_through")},
                                                 separators=(",", ":")), encoding="utf-8")
     print(f"wrote {OUT / 'priors.json'} (as of {pri['as_of']}, {len(pri['heroes'])} heroes)")
     if args.fixtures:
         d = json.loads((DATA_DIR / "win_probability.json").read_text(encoding="utf-8"))
-        write_fixtures([m["match_id"] for m in d["matches"]][:3], (full, live))
+        write_fixtures([m["match_id"] for m in d["matches"]][:3], (full, live, stream))
 
 
 if __name__ == "__main__":

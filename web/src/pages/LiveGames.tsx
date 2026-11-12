@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi, type HeroesResponse } from "../api";
-import { LiveLine, type LivePoint } from "../charts/LiveLine";
 import { TEAM_COLOR } from "../charts/WinProb";
 import { liveGames, type LiveGame } from "../wp/client";
+import { LiveTracker } from "./LiveTracker";
 
 const TEAMS: [string, string] = ["Hidden King", "Archmother"];
 const POLL_S = 30;
@@ -14,9 +15,12 @@ export function LiveGames() {
   const [games, setGames] = useState<LiveGame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updated, setUpdated] = useState<Date | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [params, setParams] = useSearchParams();
+  const selected = /^\d+$/.test(params.get("match") ?? "") ? Number(params.get("match")) : null;   // in the address, so a tracked match can be shared
+  const select = (id: number | null) => { setParams(id == null ? {} : { match: String(id) }); if (id != null) window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const [query, setQuery] = useState("");
+  const submit = (e: FormEvent) => { e.preventDefault(); if (/^\d+$/.test(query.trim())) select(Number(query.trim())); };
   const [shown, setShown] = useState(15);
-  const history = useRef(new Map<number, LivePoint[]>());       // every poll since the page opened, per match
 
   useEffect(() => {
     let stop = false;
@@ -24,11 +28,6 @@ export function LiveGames() {
       try {
         const g = await liveGames();
         if (stop) return;
-        for (const x of g) {
-          const h = history.current.get(x.match_id) ?? [];
-          h.push({ minute: x.minute, p: x.p, souls: x.souls });
-          history.current.set(x.match_id, h);
-        }
         setGames(g); setError(null); setUpdated(new Date());
       } catch (e) { if (!stop) setError((e as Error).message); }
     };
@@ -36,10 +35,6 @@ export function LiveGames() {
     const id = window.setInterval(() => { if (!document.hidden) tick(); }, POLL_S * 1000);   // no polling in a background tab
     return () => { stop = true; window.clearInterval(id); };
   }, []);
-
-  const sel = games?.find((g) => g.match_id === selected) ?? null;
-  const ended = selected != null && games != null && !sel;
-  const points = selected != null ? history.current.get(selected) ?? [] : [];
 
   const icons = (ids: number[]) => (
     <span className="roster-heroes">
@@ -55,36 +50,23 @@ export function LiveGames() {
     <>
       <h1>Live games</h1>
       <p className="lede">
-        Games being played right now, with the model's current win chance for each team. Pick one to watch its
-        graph grow. Refreshes every {POLL_S} seconds.
+        Games being played right now, with the model's current win chance for each team. Track one of them, or
+        any other match by its ID, to watch its graph grow. The list refreshes every {POLL_S} seconds.
       </p>
       {error && <p className="error">{error}</p>}
 
-      {selected != null && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-head">
-            <div>
-              <h2>Match {selected}{ended && " · no longer listed (it has probably ended)"}</h2>
-              <span className="muted small">
-                {TEAMS[0]}'s win chance since you opened this page ({points.length} reading{points.length === 1 ? "" : "s"}).
-                {sel && <> Now: <b>{pc(sel.p)}</b> {TEAMS[0]} · <b>{pc(1 - sel.p)}</b> {TEAMS[1]} · objectives lost {sel.lost[0]}–{sel.lost[1]}.</>}
-              </span>
-            </div>
-            <button className="btn" onClick={() => setSelected(null)}>Close</button>
-          </div>
-          {sel && (
-            <div className="rosters">
-              {[0, 1].map((t) => (
-                <div key={t} className="roster">
-                  <span className="small"><i className="sw" style={{ background: TEAM_COLOR[t] }} /><b>{TEAMS[t]}</b></span>
-                  {icons(sel.heroes[t])}
-                </div>
-              ))}
-            </div>
-          )}
-          <LiveLine points={points} teams={TEAMS} />
+      <form className="filters" onSubmit={submit}>
+        <div className="filter">
+          <label htmlFor="track-id">Track any match in progress by its ID</label>
+          <input id="track-id" inputMode="numeric" placeholder="e.g. 136022062" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-      )}
+        <button className="btn" type="submit" disabled={!/^\d+$/.test(query.trim())}>Track</button>
+        <span className="muted small" style={{ alignSelf: "center" }}>
+          Works for your own game too, not only the listed ones. Up to 6 different matches an hour.
+        </span>
+      </form>
+
+      {selected != null && <LiveTracker key={selected} matchId={selected} teams={TEAMS} heroes={hero} onClose={() => select(null)} />}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head">
@@ -119,7 +101,7 @@ export function LiveGames() {
                     <td>{Math.abs(g.souls).toLocaleString()} {g.souls >= 0 ? TEAMS[0] : TEAMS[1]}</td>
                     <td>{g.ranked ? "Ranked" : "Unranked"}</td>
                     <td>{g.spectators}</td>
-                    <td><button className="btn" onClick={() => { setSelected(g.match_id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Watch</button></td>
+                    <td><button className="btn" onClick={() => select(g.match_id)}>Track</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -134,12 +116,12 @@ export function LiveGames() {
       <p className="note">
         <span aria-hidden>ⓘ</span>
         <span>
-          <b>What this uses.</b> While a game is running, only team souls, objectives, heroes and leavers are public,
-          so this is the <b>live model</b>: it picks the winner about 72% of the time across a game, a little less
-          than the full model, and it treats every player as average (no player history in the browser). Game time is
-          counted from when the match was created, so it can run a minute or two ahead of the in-game clock. The
-          graph starts when you open the page; nothing is recorded before that. The list is whatever the Deadlock API
-          shows, not every game being played.
+          <b>What the list uses.</b> The list only has team souls, objectives, heroes and leavers, so its win
+          chances come from the <b>live model</b>, which picks the winner about 72% of the time across a game and
+          treats every player as average. Game time is estimated: the list gives when a match was created, and the
+          in-game clock starts about 2 minutes later. <b>Tracking a match</b> reads its live broadcast instead: exact
+          clock, every player's current stats, and a fuller model. The list is the 200 most-watched games the
+          Deadlock API can see, not every game being played.
         </span>
       </p>
     </>
