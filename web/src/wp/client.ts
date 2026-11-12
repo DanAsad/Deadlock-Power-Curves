@@ -6,6 +6,7 @@ import { isRanked, isScorable, liveRow, lostObjectives, matchEvents, matchRows, 
 import { predict, type WebModel } from "./model";
 
 const API = "https://api.deadlock-api.com/v1";
+const STALE_MIN = 30;        // newest listed game older than this = a stale copy of the list
 const cache = new Map<string, Promise<unknown>>();
 const once = <T,>(name: string): Promise<T> => {
   if (!cache.has(name)) {
@@ -62,8 +63,16 @@ export interface LiveGame {
 
 /** Standard 6v6 games in progress, each with the live model's current win chance for team 0. */
 export async function liveGames(): Promise<LiveGame[]> {
-  const [all, priors, live] = await Promise.all([deadlock<ActiveMatch[]>("matches/active", "live games"), loadPriors(), loadLiveModel()]);
-  const now = Date.now() / 1000;
+  let [all, priors, live] = await Promise.all([deadlock<ActiveMatch[]>("matches/active", "live games"), loadPriors(), loadLiveModel()]);
+  let now = Date.now() / 1000;
+  // The API's cache can hand out an hours-old copy. A real list always has games that started
+  // recently, so if even the newest one is old, ask again past the cache (once per minute at most).
+  const newest = (list: ActiveMatch[]) => Math.min(...list.map((m) => (now - m.start_time) / 60), Infinity);
+  if (all.length && newest(all) > STALE_MIN) {
+    all = await deadlock<ActiveMatch[]>(`matches/active?fresh=${Math.floor(now / 60)}`, "live games");
+    now = Date.now() / 1000;
+    if (all.length && newest(all) > STALE_MIN) throw new Error("The Deadlock API is returning an out-of-date list of live games; try again in a few minutes");
+  }
   return all
     .filter((m) => m.game_mode === 1 && m.players.length === 12 && m.players.filter((p) => p.team === 0).length === 6)
     .map((m) => {
