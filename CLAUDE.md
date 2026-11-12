@@ -60,3 +60,5 @@ users browse and filter charts about Deadlock heroes.
 ## Working style
 Dan prefers direct, continuation-oriented work: make edits without asking
 before each one; explain decisions briefly.
+After each finished change, commit and push to GitHub (origin/main) without
+being asked. Never commit `data/cache/`.
