@@ -1,0 +1,117 @@
+{
+ "generated_at": "2026-11-10T16:41:53+00:00",
+ "source": "deadlock-api data lake",
+ "days": 30,
+ "first_match": "2026-10-11T01:00:00+01:00",
+ "last_match": "2026-11-10T12:47:28+00:00",
+ "bins": [
+  {
+   "idx": 0,
+   "label": "<20",
+   "mid_min": 17.5
+  },
+  {
+   "idx": 1,
+   "label": "20\u201325",
+   "mid_min": 22.5
+  },
+  {
+   "idx": 2,
+   "label": "25\u201330",
+   "mid_min": 27.5
+  },
+  {
+   "idx": 3,
+   "label": "30\u201335",
+   "mid_min": 32.5
+  },
+  {
+   "idx": 4,
+   "label": "35\u201340",
+   "mid_min": 37.5
+  },
+  {
+   "idx": 5,
+   "label": "40\u201345",
+   "mid_min": 42.5
+  },
+  {
+   "idx": 6,
+   "label": "45\u201350",
+   "mid_min": 47.5
+  },
+  {
+   "idx": 7,
+   "label": "50+",
+   "mid_min": 55.0
+  }
+ ],
+ "min_games_per_bin": 300,
+ "min_bins_for_index": 3,
+ "filters": {
+  "queue": [
+   {
+    "id": "all",
+    "label": "All queues"
+   },
+   {
+    "id": "ranked",
+    "label": "Ranked"
+   },
+   {
+    "id": "unranked",
+    "label": "Unranked"
+   }
+  ],
+  "rank": [
+   {
+    "id": "all",
+    "label": "All ranks"
+   },
+   {
+    "id": "low",
+    "label": "Initiate\u2013Arcanist"
+   },
+   {
+    "id": "mid",
+    "label": "Ritualist\u2013Archon"
+   },
+   {
+    "id": "high",
+    "label": "Oracle\u2013Eternus"
+   }
+  ],
+  "period": [
+   {
+    "id": "all",
+    "label": "All patches"
+   }
+  ]
+ },
+ "sample_sizes": {
+  "all|all|all": {
+   "matches": 5902600,
+   "player_rows": 70831200
+  },
+  "ranked|all|all": {
+   "matches": 817036,
+   "player_rows": 9804432
+  },
+  "unranked|all|all": {
+   "matches": 5085564,
+   "player_rows": 61026768
+  },
+  "ranked|low|all": {
+   "matches": 400910,
+   "player_rows": 4810920
+  },
+  "ranked|mid|all": {
+   "matches": 249748,
+   "player_rows": 2996976
+  },
+  "ranked|high|all": {
+   "matches": 166378,
+   "player_rows": 1996536
+  }
+ }
+}

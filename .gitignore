@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+.venv/
+output/
+web/node_modules/
+web/dist/
+# data/ holds small precomputed tables; commit them if you deploy without the pipeline
+data/cache/
+*.tmp
+.claude/

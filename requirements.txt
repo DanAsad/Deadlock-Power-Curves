@@ -1,0 +1,7 @@
+duckdb>=1.3
+pandas>=2.0
+numpy
+pyarrow
+fastapi
+uvicorn[standard]
+pytest
