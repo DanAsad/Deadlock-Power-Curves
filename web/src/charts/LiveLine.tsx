@@ -5,7 +5,8 @@ import { useWidth } from "../components/ui";
 import { linear } from "./scale";
 import { EVENT_LETTER, TEAM_COLOR } from "./WinProb";
 
-export interface LivePoint { minute: number; p: number; souls: number; kills?: [number, number] }
+// start: the pre-game point (draft and players only), joined to the first real reading by a dashed line
+export interface LivePoint { minute: number; p: number; souls: number; kills?: [number, number]; start?: boolean }
 export interface LiveEvent { minute: number; kind: string; label: string; by: number }
 
 const pc = (v: number) => `${Math.round(v * 100)}%`;
@@ -23,8 +24,9 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
   const x = linear([first, Math.max(last, first + 5)], [m.l, W - m.r]);      // at least a 5-minute window
   const y = linear([0, 1], [H - m.b, m.t]);
   const mid = y(0.5);
-  const d = points.map((p, i) => `${i ? "L" : "M"}${x(p.minute)},${y(p.p)}`).join("");
-  const area = `${d}L${x(last)},${mid}L${x(first)},${mid}Z`;
+  const real = points.filter((p) => !p.start), start = points.find((p) => p.start);
+  const d = real.map((p, i) => `${i ? "L" : "M"}${x(p.minute)},${y(p.p)}`).join("");
+  const area = real.length ? `${d}L${x(last)},${mid}L${x(real[0].minute)},${mid}Z` : "";
   const xt: number[] = [];
   for (let t = Math.ceil(first); t <= Math.max(last, first + 5); t += Math.max(1, Math.round((Math.max(last, first + 5) - first) / 6))) xt.push(t);
   const a = active != null ? points[Math.min(active, points.length - 1)] : null;
@@ -63,6 +65,17 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
           <path d={area} fill={TEAM_COLOR[0]} opacity={0.2} clipPath={`url(#${clip}a)`} />
           <path d={area} fill={TEAM_COLOR[1]} opacity={0.2} clipPath={`url(#${clip}b)`} />
           <path d={d} fill="none" stroke="var(--ink)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {start && real[0] && (
+            <g>
+              <path d={`M${x(start.minute)},${y(start.p)}L${x(real[0].minute)},${y(real[0].p)}`} fill="none"
+                    stroke="var(--muted)" strokeWidth={1.5} strokeDasharray="4 4" />
+              <circle cx={x(start.minute)} cy={y(start.p)} r={4} fill="var(--surface)" stroke="var(--ink)" strokeWidth={1.5} />
+              {x(real[0].minute) - x(start.minute) > 90 && (
+                <text x={(x(start.minute) + x(real[0].minute)) / 2} y={Math.min(y(start.p), y(real[0].p)) - 8}
+                      textAnchor="middle" fontSize={11} fill="var(--muted)">not recorded</text>
+              )}
+            </g>
+          )}
           {/* objectives taken while watching: a lettered marker on the side of the team that took it */}
           {events.filter((e) => e.minute >= first).map((e, i) => {
             const cy = e.by === 0 ? m.t + 30 : H - m.b - 24;
@@ -84,11 +97,11 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
       )}
       {a && (
         <div className="tooltip" style={{ left: Math.min(Math.max(x(a.minute), 100), W - 100), top: m.t + 4, transform: "translate(-50%, 0)" }}>
-          <div className="tl" style={{ marginBottom: 2 }}>{exact ? "" : "about "}{clock(a.minute)}</div>
+          <div className="tl" style={{ marginBottom: 2 }}>{a.start ? "Start: draft and players only" : `${exact ? "" : "about "}${clock(a.minute)}`}</div>
           <div><span className="key" style={{ background: TEAM_COLOR[0] }} /><b className="num">{pc(a.p)}</b> <span className="tl">{teams[0]}</span></div>
           <div><span className="key" style={{ background: TEAM_COLOR[1] }} /><b className="num">{pc(1 - a.p)}</b> <span className="tl">{teams[1]}</span></div>
-          <div className="tl" style={{ marginTop: 2 }}>soul lead <b className="num">{Math.abs(a.souls).toLocaleString()}</b> ({a.souls >= 0 ? teams[0] : teams[1]})</div>
-          {a.kills && <div className="tl">kills <b className="num">{a.kills[0]}–{a.kills[1]}</b></div>}
+          {!a.start && <div className="tl" style={{ marginTop: 2 }}>soul lead <b className="num">{Math.abs(a.souls).toLocaleString()}</b> ({a.souls >= 0 ? teams[0] : teams[1]})</div>}
+          {a.kills && !a.start && <div className="tl">kills <b className="num">{a.kills[0]}–{a.kills[1]}</b></div>}
         </div>
       )}
     </div>
