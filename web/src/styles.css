@@ -248,3 +248,13 @@ tr.dim td { color: var(--muted); }
 .live-table td { vertical-align: middle; }
 .live-table tr[aria-selected="true"] td { background: var(--surface-2); }
 .live-table .roster-heroes img, .live-table .hero-fallback { width: 24px; height: 24px; }
+
+/* author credit: small byline in the header, full credits in the footer */
+.byline { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.byline a { color: var(--ink-2); text-decoration: none; }
+.byline a:hover { color: var(--ink); text-decoration: underline; }
+.site-footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.site-footer .credits { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+.site-footer .credits b { color: var(--ink); font-weight: 600; }
+.site-footer .links { display: flex; gap: 14px; }
+@media (max-width: 640px) { .byline { display: none; } }
