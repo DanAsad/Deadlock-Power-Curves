@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from api.store import DATA_DIR
 
@@ -34,6 +35,18 @@ def _summary(m: dict) -> dict:
     p = [x["p"] if m["winner"] == 0 else 1 - x["p"] for x in m["points"]]
     return {**{k: v for k, v in m.items() if k not in ("points", "events")},
             "lowest_winner_chance": min(p) if p else None}
+
+
+WEB_FILES = ("win_model", "win_model_live", "priors")       # pipeline/export_web.py
+
+
+@router.get("/web-model/{name}")
+def web_model(name: str):
+    """The models and draft tables the browser runs (live games, and match lookups on the static site)."""
+    f = DATA_DIR / "web" / f"{name}.json"
+    if name not in WEB_FILES or not f.exists():
+        raise HTTPException(404, f"data/web/{name}.json missing: run python -m pipeline.export_web")
+    return FileResponse(f, media_type="application/json")
 
 
 @router.get("/win-probability")

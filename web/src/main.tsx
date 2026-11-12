@@ -9,6 +9,7 @@ import { HeroGrid } from "./pages/HeroGrid";
 import { ScalingIndex } from "./pages/ScalingIndex";
 import { ModelCheck } from "./pages/ModelCheck";
 import { WinFactors } from "./pages/WinFactors";
+import { LiveGames } from "./pages/LiveGames";
 import { WinProbability } from "./pages/WinProbability";
 import "./styles.css";
 
@@ -20,6 +21,7 @@ const SECTIONS = [
   { to: "/what-wins", label: "What wins games" },
   { to: "/model-check", label: "Model check" },
   { to: "/win-probability", label: "Win probability" },
+  { to: "/live", label: "Live games" },
 ];
 
 function ThemeToggle() {
@@ -72,6 +74,7 @@ function Shell() {
           <Route path="/what-wins" element={<WinFactors />} />
           <Route path="/model-check" element={<ModelCheck />} />
           <Route path="/win-probability" element={<WinProbability />} />
+          <Route path="/live" element={<LiveGames />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>
         <footer className="muted small" style={{ marginTop: 48 }}>

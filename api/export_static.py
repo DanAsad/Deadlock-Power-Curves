@@ -8,8 +8,10 @@ Layout (slice = queue_rank_period, e.g. ranked_high_all):
   heroes/<slice>.json, power-curves/<slice>.json, scaling-index/<slice>.json,
   win-factors/<slice>.json
   win-probability.json (example matches), win-probability/<match_id>.json
+  web-model/<name>.json (models and draft tables run in the browser)
 """
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -52,6 +54,13 @@ def export(out: Path) -> int:
             write(out / "win-probability" / f"{m['match_id']}.json", win_probability.match(m["match_id"])); n += 1
     except HTTPException as e:
         print(f"skipped win-probability: {e.detail}")
+    for name in win_probability.WEB_FILES:                      # models the browser runs
+        src = win_probability.DATA_DIR / "web" / f"{name}.json"
+        if src.exists():
+            (out / "web-model").mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, out / "web-model" / f"{name}.json"); n += 1
+        else:
+            print(f"skipped web-model/{name}: run python -m pipeline.export_web")
     per_slice = {"heroes": power_curves.heroes, "power-curves": lambda s: power_curves.power_curves(s, None),
                  "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors}
     for s in slices():

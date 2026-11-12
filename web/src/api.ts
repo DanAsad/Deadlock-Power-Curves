@@ -45,7 +45,7 @@ export function sliceQuery(s: Slice, extra: Record<string, string | number> = {}
 
 // Static mode (VITE_STATIC=1, used for GitHub Pages): there is no backend, so
 // every API response is a pre-generated file (see api/export_static.py).
-const STATIC = import.meta.env.VITE_STATIC === "1";
+export const STATIC = import.meta.env.VITE_STATIC === "1";
 
 /** "heroes?queue=ranked&rank=all&period=all" -> "<base>data/heroes/ranked_all_all.json" */
 function staticUrl(path: string): { url: string; heroIds: number[] } {
@@ -57,7 +57,7 @@ function staticUrl(path: string): { url: string; heroIds: number[] } {
   return { url: `${base}/${q.get("queue")}_${q.get("rank")}_${q.get("period")}.json`, heroIds };
 }
 
-async function load<T>(path: string): Promise<T> {
+export async function apiGet<T>(path: string): Promise<T> {
   if (!STATIC) {
     const r = await fetch(`/api/${path}`);
     if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `HTTP ${r.status}`);
@@ -84,7 +84,7 @@ export function useApi<T>(path: string | null) {
     if (!path) return;
     const id = ++seq.current;
     setLoading(true);
-    load<T>(path)
+    apiGet<T>(path)
       .then((d) => { if (id === seq.current) { setData(d); setError(null); } })
       .catch((e: Error) => { if (id === seq.current) setError(e.message); })
       .finally(() => { if (id === seq.current) setLoading(false); });
