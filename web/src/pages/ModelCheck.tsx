@@ -39,6 +39,8 @@ interface SplitEval {
   matches_train: number; matches_test: number; minutes: MinuteEval[];
   unified?: ModelInfo; live?: ModelInfo;
   ranked_model?: { matches: number; shared: Scores; own: Scores; own_vs_shared: Delta; used: boolean };
+  segment_models?: { id: string; label: string; train_matches: number; matches: number; skipped?: boolean;
+    shared?: Scores; own?: Scores; own_vs_shared?: Delta; used?: boolean }[];
   segments?: Segment[]; queue_models?: QueueModel[]; every_minute?: EveryMinute | null;
 }
 interface EvalResponse {
@@ -315,15 +317,35 @@ export function ModelCheck() {
                 </tbody>
               </table>
             </div>
-            {sp.ranked_model && (
-              <p className="muted small" style={{ margin: "8px 0 0" }}>
-                <b>A second full model for ranked?</b> A full model trained on ranked matches only, against the shared full
-                model, on {int(sp.ranked_model.matches)} ranked test matches: log loss {f4(sp.ranked_model.own.log_loss)} vs{" "}
-                {f4(sp.ranked_model.shared.log_loss)} (difference {f4(sp.ranked_model.own_vs_shared.delta_log_loss)}, 95% CI{" "}
-                {ci(sp.ranked_model.own_vs_shared)}). {sp.ranked_model.used
-                  ? "It is better, so ranked matches use it."
-                  : "No real difference: the shared model's per-queue weights already capture it, so there is one model."}
-              </p>
+            {(sp.segment_models ?? []).length > 0 && (
+              <>
+                <h3 style={{ margin: "16px 0 2px", fontSize: 14 }}>A separate model per queue and rank?</h3>
+                <span className="muted small">
+                  Each row trains a full model on that kind of match only and tests it against the shared full model on
+                  the same held-out matches. A separate model is used only where it is reliably better (95% CI above zero).
+                </span>
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>Trained and tested on</th><th>Training matches</th><th>Test matches</th><th>Own model log loss</th>
+                      <th>Shared model log loss</th><th>Gain (95% CI)</th><th>Own accuracy</th><th>Shared accuracy</th><th>Verdict</th></tr></thead>
+                    <tbody>
+                      {sp.segment_models!.map((m) => (
+                        <tr key={m.id}>
+                          <td>{m.label}</td><td>{int(m.train_matches)}</td><td>{int(m.matches)}</td>
+                          {m.own && m.shared && m.own_vs_shared ? (
+                            <>
+                              <td>{f4(m.own.log_loss)}</td><td>{f4(m.shared.log_loss)}</td>
+                              <td>{f4(m.own_vs_shared.delta_log_loss)} ({ci(m.own_vs_shared)})</td>
+                              <td>{pct(m.own.accuracy)}</td><td>{pct(m.shared.accuracy)}</td>
+                              <td>{m.used ? "Own model used" : m.own_vs_shared.ci_high < 0 ? "Shared is better" : "No real difference"}</td>
+                            </>
+                          ) : <td colSpan={6}>Too few matches to train a model</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
             {(sp.queue_models ?? []).length > 0 && (
               <ul className="muted small" style={{ margin: "8px 0 0", paddingLeft: 18 }}>
