@@ -2,6 +2,8 @@ duckdb>=1.3
 pandas>=2.0
 numpy
 pyarrow
+scikit-learn
+joblib
 fastapi
 uvicorn[standard]
 pytest

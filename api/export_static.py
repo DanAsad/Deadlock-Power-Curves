@@ -1,0 +1,61 @@
+"""Write every API response as a JSON file, for hosting without a backend
+(GitHub Pages). The frontend built with VITE_STATIC=1 reads these files.
+
+  python -m api.export_static web/dist/data
+
+Layout (slice = queue_rank_period, e.g. ranked_high_all):
+  meta.json, model-eval.json
+  heroes/<slice>.json, power-curves/<slice>.json, scaling-index/<slice>.json,
+  win-factors/<slice>.json
+"""
+import json
+import sys
+from pathlib import Path
+
+from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
+
+from api.routers import model_eval, power_curves, win_factors
+from api.store import store
+
+
+def slices() -> list[power_curves.Slice]:
+    f = store.fresh().meta["filters"]
+    out = []
+    for q in f["queue"]:
+        for r in f["rank"]:
+            if r["id"] != "all" and q["id"] != "ranked":      # rank brackets exist for ranked only
+                continue
+            for p in f["period"]:
+                out.append(power_curves.Slice(queue=q["id"], rank=r["id"], period=p["id"]))
+    return out
+
+
+def write(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(jsonable_encoder(payload), separators=(",", ":")), encoding="utf-8")
+
+
+def export(out: Path) -> int:
+    n = 0
+    write(out / "meta.json", power_curves.meta()); n += 1
+    for name, fn in (("model-eval", model_eval.model_eval),):
+        try:
+            write(out / f"{name}.json", fn()); n += 1
+        except HTTPException as e:                             # optional table not built yet
+            print(f"skipped {name}: {e.detail}")
+    per_slice = {"heroes": power_curves.heroes, "power-curves": lambda s: power_curves.power_curves(s, None),
+                 "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors}
+    for s in slices():
+        key = f"{s.queue}_{s.rank}_{s.period}"
+        for name, fn in per_slice.items():
+            try:
+                write(out / name / f"{key}.json", fn(s)); n += 1
+            except HTTPException as e:
+                print(f"skipped {name}/{key}: {e.detail}")
+    return n
+
+
+if __name__ == "__main__":
+    target = Path(sys.argv[1] if len(sys.argv) > 1 else "web/dist/data")
+    print(f"wrote {export(target)} files to {target}")

@@ -39,6 +39,15 @@ Tests: `python -m pytest pipeline api`. The demo test plants known per-hero
 scaling slopes in synthetic matches and checks the scaling index recovers them
 (correlation > 0.95).
 
+## Online version (GitHub Pages)
+
+Live at https://danasad.github.io/Deadlock-Power-Curves/. GitHub Pages has no
+backend, so on every push to `main` the workflow in `.github/workflows/pages.yml`
+builds the frontend in static mode (`VITE_STATIC=1`) and runs
+`python -m api.export_static`, which writes every API response as a JSON file
+from the committed tables in `data/`. To refresh the numbers online: rerun the
+pipeline locally, commit `data/`, push.
+
 ## Data
 
 - Lake: `https://data.deadlock-api.com/v1/catalog.ducklake` (DuckLake, read-only,
