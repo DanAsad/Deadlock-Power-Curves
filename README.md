@@ -3,6 +3,9 @@
 Portfolio project on Deadlock match data from the free
 [Deadlock API](https://deadlock-api.com) public data lake. Not affiliated with Valve.
 
+**By Dan Asad** · [LinkedIn](https://www.linkedin.com/in/danasad/) · [GitHub](https://github.com/DanAsad) ·
+live site: https://danasad.github.io/Deadlock-Power-Curves/
+
 **Phase 1 (this repo):** win rate by game length for every hero, with 95%
 confidence intervals and a scaling index (early-game vs late-game), browsable in
 a web app with patch / queue / rank filters.

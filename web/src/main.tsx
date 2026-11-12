@@ -14,6 +14,9 @@ import { WinProbability } from "./pages/WinProbability";
 import "./styles.css";
 
 // Sections. Phase 2 is already a route; it only needs its page and API router.
+const AUTHOR = { name: "Dan Asad", linkedin: "https://www.linkedin.com/in/danasad/", github: "https://github.com/DanAsad" };
+const REPO = "https://github.com/DanAsad/Deadlock-Power-Curves";
+
 const SECTIONS = [
   { to: "/", label: "Heroes", end: true },
   { to: "/power-curves", label: "All power curves" },
@@ -57,6 +60,9 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
+        <span className="byline">
+          by <a href={AUTHOR.linkedin} target="_blank" rel="noopener noreferrer">{AUTHOR.name}</a>
+        </span>
         <ThemeToggle />
       </header>
       <main>
@@ -77,10 +83,20 @@ function Shell() {
           <Route path="/live" element={<LiveGames />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>
-        <footer className="muted small" style={{ marginTop: 48 }}>
-          Data: <a href="https://deadlock-api.com">Deadlock API</a> public data lake
-          {meta.data && <> · built {new Date(meta.data.generated_at).toLocaleString()} · last {meta.data.days} days</>}
-          {" "}· Not affiliated with Valve.
+        <footer className="site-footer">
+          <div className="credits">
+            <span>Designed and built by <b>{AUTHOR.name}</b></span>
+            <span className="links">
+              <a href={AUTHOR.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+              <a href={AUTHOR.github} target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a href={REPO} target="_blank" rel="noopener noreferrer">Source code</a>
+            </span>
+          </div>
+          <div className="muted small">
+            Data: <a href="https://deadlock-api.com">Deadlock API</a> public data lake
+            {meta.data && <> · built {new Date(meta.data.generated_at).toLocaleString()} · last {meta.data.days} days</>}
+            {" "}· Not affiliated with Valve.
+          </div>
         </footer>
       </main>
     </MetaContext.Provider>
