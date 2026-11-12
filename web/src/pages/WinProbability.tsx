@@ -11,6 +11,7 @@ interface MatchSummary {
   match_id: number; label: string; blurb: string; start_time: string; duration_s: number; queue: string;
   average_badge: number | null; winner: number; truncated: boolean; players: Player[];
   lowest_winner_chance: number | null;
+  history_players?: number;          // browser scoring: players whose match history could be loaded
 }
 interface MatchFull extends MatchSummary { points: WpPoint[]; events: WpEvent[] }
 interface ModelInfo { held_out_day: string | null; saved_at: string | null }
@@ -179,8 +180,9 @@ export function WinProbability() {
               )}
               {inBrowser && (
                 <p className="muted small" style={{ margin: "6px 0 0" }}>
-                  Scored in your browser, where player history and ranks are not available: every player counts as
-                  average, so the early minutes lean less on who is playing than in the example matches.
+                  Scored in your browser. Player history comes from the players' public match histories
+                  ({m.history_players ?? 0} of {m.players.length} loaded; the rest count as average), which can differ by a
+                  game or two from the data the model was trained on. Ranks are not available, so the rank gap counts as zero.
                 </p>
               )}
               {m.truncated && (

@@ -75,10 +75,15 @@ retraining), commit `data/`, push.
 - **Scaling index**: inverse-variance weighted least-squares slope of win rate
   on bucket midpoint, in percentage points per extra 10 minutes, with a 95% CI.
   Needs ≥ 3 shown buckets. Early/late labels are used only when the CI excludes 0.
-- **Caveat:** game length is an outcome, not a clock. A hero that wins short
-  games may be strong early, or may just win stomps (which end sooner). The
-  lake's `stats.*` snapshots allow the better measure next: soul share and
-  kill participation *at* minute X.
+- **Adjusted for hero strength.** Game length is an outcome, not a clock:
+  short games are stomps, and the stronger side wins stomps. A plain slope
+  therefore calls every strong hero "early-game"; across heroes it correlated
+  −0.74 with overall win rate. The index first estimates, per length bucket and
+  across all heroes, how much of a hero's overall edge shows up in that bucket
+  (about 1.6× in 20–30 minute games, 0.45× in 50+ minute games), removes that
+  part, and fits the slope on what is left. The adjusted index correlates 0.02
+  with win rate. The plain slope is kept as `raw_pp_per_10min` (table view),
+  and is still what the win model's draft-scaling factor uses.
 
 ## What wins games
 
@@ -178,14 +183,15 @@ model is saved to `data/model/win_model.joblib` for the win-probability page.
 ### Steps 3 to 5: new information, cleaner data, every minute
 
 Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
-123k test matches. Log loss, lower is better.
+146k test matches (rerun on 12 Nov, once the last days had fully loaded). Log
+loss, lower is better.
 
 | Minute | Souls only | Before step 3 | Full model | Live model | Accuracy (full) |
 |---|---|---|---|---|---|
-| 3 | 0.678 | 0.632 | 0.623 | 0.633 | 65.2% |
-| 15 | 0.597 | 0.543 | 0.536 | 0.553 | 72.3% |
-| 30 | 0.443 | 0.382 | 0.378 | 0.393 | 82.4% |
-| 45 | 0.559 | 0.433 | 0.429 | 0.465 | 79.7% |
+| 3 | 0.678 | 0.632 | 0.623 | 0.634 | 65.1% |
+| 15 | 0.597 | 0.543 | 0.537 | 0.553 | 72.2% |
+| 30 | 0.444 | 0.384 | 0.380 | 0.395 | 82.2% |
+| 45 | 0.557 | 0.433 | 0.430 | 0.465 | 79.5% |
 
 - **Step 3, new information.** Player history, hero pairs, lane state and
   respawn timers lower log loss at every minute (0.007 at minute 3, 0.003 at
@@ -197,9 +203,12 @@ Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
   (`python -m pipeline.patches` → `data/patches.json`) and cut the history
   window; the latest patch (29 Sep) is before this window, so it changes
   nothing yet. Queue flags are model inputs: calibration error is 0.2% overall,
-  0.4% in ranked, about 2% in the small new-player and low-priority queues. A
-  ranked-only per-minute model beats the shared one on ranked matches (0.5255
-  vs 0.5300), so the full model keeps separate weights per queue.
+  0.3% in ranked, 1 to 3% in the small new-player and low-priority queues. A
+  ranked-only per-minute model beats the shared one on ranked matches (0.5260
+  vs 0.5301), so the full model keeps separate weights per queue. A second
+  full model trained on ranked matches only was also tested and adds nothing
+  on top of that (0.5264 vs 0.5264, 95% CI −0.0004 to +0.0006), so there is
+  one model.
 - **Step 5, every minute.** Training on a row per minute instead of only the
   snapshot minutes lowers log loss between snapshots by 0.012 (95% CI 0.011 to
   0.013). The model is told how old the stats are.
@@ -207,8 +216,15 @@ Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
   team souls, objective masks, heroes, account ids, abandons, start time and
   queue while a game runs, but no kills, deaths or per-player stats. So two
   models are saved: `data/model/win_model.joblib` (all factors, for finished
-  matches) and `win_model_live.joblib` (live fields only; 72.5% vs 73.6%
+  matches) and `win_model_live.joblib` (live fields only; 72.4% vs 73.5%
   accuracy over all snapshot minutes).
+- **Live broadcast check.** The API's live broadcast query
+  (`/v1/matches/demo/live/query`) works for any match in progress, by id, and
+  carries current per-player stats and objective state. A third model,
+  `win_model_stream.joblib`, uses everything the full model does except the
+  fields the broadcast lacks or counts differently (souls lost on death, total
+  time dead, Mid-Boss claims, last hits, rank gap): 73.4% accuracy and log loss 0.514 over all
+  snapshot minutes, against 73.5% and 0.511 for the full model.
 
 ## Win probability
 
@@ -232,7 +248,7 @@ Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
 
 The online site has no backend, so the models run in the browser:
 
-- `python -m pipeline.export_web` writes both models (trees, linear weight
+- `python -m pipeline.export_web` writes the three models (trees, linear weight
   tables, recalibration map; 1.6 MB each) and the draft tables to `data/web/`.
 - `web/src/wp/features.ts` rebuilds the per-minute rows from the Deadlock API's
   match metadata, `model.ts` runs the model, `client.ts` ties them together.
@@ -240,9 +256,13 @@ The online site has no backend, so the models run in the browser:
   checks the browser code against the pipeline on three fixture matches; the
   win chances agree to 5 decimal places. Refresh fixtures with
   `python -m pipeline.export_web --fixtures`.
-- **Limits:** player history and ranks are not available in the browser, so
-  those factors count as average; looked-up matches lean less on who is
-  playing than the precomputed examples.
+- **Player history** comes from each player's public match history
+  (`history.ts`, 12 requests per match), with the same 30-day window and
+  shrinkage as the pipeline. The API lists a game or two per player that the
+  lake's filters drop, so the values are close to the pipeline's, not equal
+  (`npx tsx scripts/history-check.ts` prints both). Players whose history
+  cannot be loaded count as average.
+- **Limit:** ranks are not available in the browser, so the rank gap counts as zero.
 
 ### Live games
 
@@ -250,6 +270,24 @@ The Live games page polls `https://api.deadlock-api.com/v1/matches/active`
 every 30 seconds and runs the live model on each standard 6v6 game: team souls,
 objectives (decoded from the objective masks, whose bit positions equal the
 objective ids), heroes and leavers. It lists the games with their current win
-chance and draws a growing graph for the one you pick. The graph starts when
-the page is opened; nothing is stored. Game time is counted from match
-creation, so it can run a minute or two ahead of the in-game clock.
+chance. The list's start time is when the match was created; the in-game clock
+starts about 2 minutes later (measured against the broadcast clock), so that
+is subtracted. Each poll uses a fresh address, because the API's cache can
+otherwise serve a copy that is minutes old.
+
+**Tracking one match** (`stream.ts`, `pages/LiveTracker.tsx`): the Track button,
+or any match id typed into the box, reads that match's live broadcast every 30
+seconds. This works for any match being played, not only the listed ones.
+
+- Three small queries per reading, each limited to the rows of one tick (about
+  1 KB; an unlimited query streams about 100 KB a second): the game clock and
+  queue, the 12 players' current stats, and the minimap's objective list.
+- The stream model scores each reading. Objectives that fall between readings
+  are marked on the graph; momentum comes from the readings themselves.
+- The graph starts when tracking starts; nothing is stored. After the match
+  ends, the Win probability page can draw the whole game.
+- API limits per visitor: 6 newly opened matches an hour, 20 queries a minute.
+  A broadcast nobody has watched yet takes 10 to 30 seconds to start.
+- `npx tsx scripts/stream-check.ts [match_id]` prints one reading and its row.
+- Team names: team 0 is the Hidden King (Amber) and team 1 the Archmother
+  (Sapphire), confirmed against the game's text files and the broadcast.

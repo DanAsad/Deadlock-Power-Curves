@@ -37,7 +37,7 @@ def _summary(m: dict) -> dict:
             "lowest_winner_chance": min(p) if p else None}
 
 
-WEB_FILES = ("win_model", "win_model_live", "priors")       # pipeline/export_web.py
+WEB_FILES = ("win_model", "win_model_live", "win_model_stream", "priors")       # pipeline/export_web.py
 
 
 @router.get("/web-model/{name}")

@@ -13,13 +13,14 @@ const root = join(here, "..", "..");
 const read = (p: string) => JSON.parse(readFileSync(p, "utf-8"));
 const full: WebModel = read(join(root, "data", "web", "win_model.json"));
 const live: WebModel = read(join(root, "data", "web", "win_model_live.json"));
+const stream: WebModel = read(join(root, "data", "web", "win_model_stream.json"));
 const fx = join(root, "web", "src", "wp", "fixtures");
 const priors: Priors = read(join(fx, "priors.json"));
 const TOL = 0.005;                 // half a percentage point
 
 let worst = 0, failed = false;
 for (const f of readdirSync(fx).filter((n) => /^\d+\.json$/.test(n))) {
-  const { metadata, expected } = read(join(fx, f)) as { metadata: ApiMatch; expected: { minute: number; p: number; p_live: number; features: Record<string, number> }[] };
+  const { metadata, expected } = read(join(fx, f)) as { metadata: ApiMatch; expected: { minute: number; p: number; p_live: number; p_stream: number; features: Record<string, number> }[] };
   const got = matchRows(metadata, priors);
   if (got.length !== expected.length) { console.error(`${f}: ${got.length} minutes, expected ${expected.length}`); failed = true; continue; }
   let dMax = 0, dLive = 0, where = "";
@@ -33,12 +34,12 @@ for (const f of readdirSync(fx).filter((n) => /^\d+\.json$/.test(n))) {
         .filter((v) => Math.abs(v.got - v.want) > 1e-3 * Math.max(1, Math.abs(v.want)));
       where = `minute ${e.minute}: ${off.slice(0, 6).map((v) => `${v.name} ${v.got.toFixed(3)} vs ${v.want}`).join("; ") || "features match"}`;
     }
-    dLive = Math.max(dLive, dl);
+    dLive = Math.max(dLive, dl, Math.abs(predict(stream, g.row) - e.p_stream));
   });
   worst = Math.max(worst, dMax, dLive);
   const ok = dMax <= TOL && dLive <= TOL;
   failed ||= !ok;
-  console.log(`${ok ? "ok  " : "FAIL"} ${f}: ${got.length} minutes, max |dp| full ${dMax.toFixed(5)}, live ${dLive.toFixed(5)}${ok ? "" : ` (${where})`}`);
+  console.log(`${ok ? "ok  " : "FAIL"} ${f}: ${got.length} minutes, max |dp| full ${dMax.toFixed(5)}, live and stream ${dLive.toFixed(5)}${ok ? "" : ` (${where})`}`);
 }
 console.log(`worst difference ${worst.toFixed(5)} (tolerance ${TOL})`);
 process.exit(failed ? 1 : 0);

@@ -2,8 +2,10 @@
 // browser. This re-implements pipeline/win_factors_sql.py; `npm run test:parity`
 // checks both give the same win chances on the fixture matches.
 //
-// Not available here: player history and ranks (those factors stay 0 = average).
+// Player history comes from history.ts (public match histories); ranks are not
+// available in the browser (rank_gap stays 0 = average).
 import type { Row } from "./model";
+import type { Reading } from "./stream";
 
 // --- match metadata (https://api.deadlock-api.com/v1/matches/{id}/metadata) ---
 export interface ApiStat {
@@ -30,6 +32,12 @@ export interface Priors {
   heroes: Record<string, { scaling: number; win_rate: number }>;
   synergy: [number, number, number][];      // [hero a, hero b, effect], a < b, same team
   counter: [number, number, number][];      // [hero a, hero b, effect of a against b], a < b
+  /** Constants of the player-history factors (pipeline/win_factors.py); absent in older exports. */
+  player?: {
+    avg_spm: number; form_prior: number; farm_prior: number; mastery_prior: number; experience_cap: number;
+    history_days: number; min_duration_s: number; patches: string[]; min_days_on_patch: number;
+  };
+  models?: string[];                        // exported model files, e.g. "win_model_stream"
 }
 
 export const MAX_MINUTE = 45;
@@ -122,7 +130,7 @@ export function isRanked(m: { match_mode: number | string }): boolean {
 }
 
 /** One row per full game minute before the match ended (up to minute 45). */
-export function matchRows(m: ApiMatch, priors: Priors): BuiltPoint[] {
+export function matchRows(m: ApiMatch, priors: Priors, history: Row = {}): BuiltPoint[] {
   const dur = m.duration_s;
   const players = m.players.map((p) => ({
     team: teamOf(p.team),
@@ -181,7 +189,7 @@ export function matchRows(m: ApiMatch, priors: Priors): BuiltPoint[] {
       .map((o) => [o.team_objective_id, teamOf(o.team)]));
 
     const row: Row = {
-      minute: t / 60, total_souls: a.nw + b.nw, ...context, ...draft, ...obj,
+      minute: t / 60, total_souls: a.nw + b.nw, ...context, ...draft, ...history, ...obj,
       souls: a.nw - b.nw, kills: a.kills - b.kills, levels: a.lvl - b.lvl, last_hits: a.lh - b.lh,
       denies: a.dn - b.dn, hero_damage: a.dmg - b.dmg, objective_damage: a.bd - b.bd,
       enemy_souls_lost: b.gdl - a.gdl, carry_concentration: 100 * (share(a) - share(b)), momentum: mom,
@@ -234,4 +242,46 @@ export function liveRow(m: ActiveMatch, priors: Priors, nowS: number): Row {
     souls: n0 - n1, enemy_abandons: -left,
     ...objectiveFeatures(destroyed), ...draftFeatures(h(0), h(1), priors),
   };
+}
+
+// --- any match in progress, from the live broadcast (stream.ts) -------------------
+export interface PastLead { clockS: number; souls: number }
+
+/** The stream model's row for one reading. Stats are current, so stale = 0.
+ *  `past`: soul leads of earlier readings of this match (for momentum); `known`: the last
+ *  objective list that could be read, used when this reading has none. */
+export function streamRow(r: Reading, past: PastLead[], priors: Priors, history: Row = {}, known: [number, number][] = []): Row {
+  const z = () => ({ nw: 0, kills: 0, lvl: 0, lh: 0, dn: 0, dmg: 0, od: 0, top: 0 });
+  const T = [z(), z()];
+  let deadNow = 0, respawn = 0, abandons = 0;
+  for (const p of r.players) {
+    const a = T[p.team], s = sgn(p.team);
+    a.nw += p.souls; a.kills += p.kills; a.lvl += p.level; a.lh += p.lastHits; a.dn += p.denies;
+    a.dmg += p.heroDamage; a.od += p.objectiveDamage; a.top = Math.max(a.top, p.souls);
+    if (p.abandoned) abandons += s;
+    else if (!p.alive) { deadNow += s; respawn += s * p.respawnS; }
+  }
+  const [a, b] = T;
+  const share = (x: { nw: number; top: number }) => (x.nw > 0 ? x.top / x.nw : 1 / 6);
+  const souls = a.nw - b.nw;
+  // soul-lead change per 5 minutes, against the oldest reading from the last 5 minutes (needs 2+ minutes)
+  const old = past.find((p) => r.clockS - p.clockS <= 300);
+  const momentum = old && r.clockS - old.clockS >= 120 ? ((souls - old.souls) * 300) / (r.clockS - old.clockS) : 0;
+  const h = (t: number) => r.players.filter((p) => p.team === t).map((p) => p.hero);
+  return {
+    minute: Math.min(r.clockS / 60, MAX_MINUTE), total_souls: a.nw + b.nw, stale: 0, ranked: r.ranked ? 1 : 0,
+    ...draftFeatures(h(0), h(1), priors), ...history, ...objectiveFeatures(r.destroyed ?? known),
+    souls, kills: a.kills - b.kills, levels: a.lvl - b.lvl, denies: a.dn - b.dn,       // no last hits: the stream counts them differently
+    hero_damage: a.dmg - b.dmg, objective_damage: a.od - b.od, carry_concentration: 100 * (share(a) - share(b)),
+    momentum, enemies_dead: -deadNow, enemy_respawn: -respawn, enemy_abandons: -abandons,
+  };
+}
+
+/** Objectives that fell between two readings, as chart events. */
+export function newObjectiveEvents(before: [number, number][], after: [number, number][], clockS: number): BuiltEvent[] {
+  const had = new Set(before.map(([id, owner]) => `${id},${owner}`));
+  return after.filter(([id, owner]) => !had.has(`${id},${owner}`)).map(([id, owner]) => {
+    const [kind, label] = OBJECTIVE_LABEL[id] ?? ["objective", "Objective"];
+    return { t: clockS, kind, label, by: 1 - owner };
+  });
 }

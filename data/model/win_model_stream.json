@@ -3,7 +3,6 @@
   "souls",
   "kills",
   "levels",
-  "last_hits",
   "denies",
   "hero_damage",
   "guardians",
@@ -40,7 +39,6 @@
   "souls": 1,
   "kills": 0,
   "levels": 0,
-  "last_hits": 1,
   "denies": 0,
   "hero_damage": 1,
   "guardians": 0,
@@ -75,7 +73,6 @@
  },
  "constrained": [
   "souls",
-  "last_hits",
   "hero_damage",
   "base_guardians",
   "shrines",
@@ -164,7 +161,7 @@
  "ranked_table": true,
  "iterations": 500,
  "train_matches": 400000,
- "train_rows": 4791803,
+ "train_rows": 4788531,
  "trained_through": "2026-11-11",
- "saved_at": "2026-11-12T11:28:36+00:00"
+ "saved_at": "2026-11-12T16:05:59+00:00"
 }

@@ -3,14 +3,16 @@
 import { useId, useState } from "react";
 import { useWidth } from "../components/ui";
 import { linear } from "./scale";
-import { TEAM_COLOR } from "./WinProb";
+import { EVENT_LETTER, TEAM_COLOR } from "./WinProb";
 
-export interface LivePoint { minute: number; p: number; souls: number }
+export interface LivePoint { minute: number; p: number; souls: number; kills?: [number, number] }
+export interface LiveEvent { minute: number; kind: string; label: string; by: number }
 
 const pc = (v: number) => `${Math.round(v * 100)}%`;
 const clock = (min: number) => `${Math.floor(min)}:${String(Math.floor((min % 1) * 60)).padStart(2, "0")}`;
 
-export function LiveLine({ points, teams, height = 240 }: { points: LivePoint[]; teams: [string, string]; height?: number }) {
+export function LiveLine({ points, teams, events = [], exact = false, height = 240 }:
+  { points: LivePoint[]; teams: [string, string]; events?: LiveEvent[]; exact?: boolean; height?: number }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const clip = useId().replace(/:/g, "");
@@ -61,6 +63,20 @@ export function LiveLine({ points, teams, height = 240 }: { points: LivePoint[];
           <path d={area} fill={TEAM_COLOR[0]} opacity={0.2} clipPath={`url(#${clip}a)`} />
           <path d={area} fill={TEAM_COLOR[1]} opacity={0.2} clipPath={`url(#${clip}b)`} />
           <path d={d} fill="none" stroke="var(--ink)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {/* objectives taken while watching: a lettered marker on the side of the team that took it */}
+          {events.filter((e) => e.minute >= first).map((e, i) => {
+            const cy = e.by === 0 ? m.t + 30 : H - m.b - 24;
+            return (
+              <g key={i}>
+                <title>{`${e.label} taken by ${teams[e.by]} around ${clock(e.minute)}`}</title>
+                <line x1={x(e.minute)} x2={x(e.minute)} y1={cy} y2={mid} stroke={TEAM_COLOR[e.by]} strokeDasharray="2 3" />
+                <circle cx={x(e.minute)} cy={cy} r={8} fill="var(--surface)" stroke={TEAM_COLOR[e.by]} strokeWidth={2} />
+                <text x={x(e.minute)} y={cy} dy="0.34em" textAnchor="middle" fontSize={9.5} fontWeight={650} fill="var(--ink)">
+                  {EVENT_LETTER[e.kind] ?? "•"}
+                </text>
+              </g>
+            );
+          })}
           {a && <line x1={x(a.minute)} x2={x(a.minute)} y1={m.t} y2={H - m.b} stroke="var(--axis)" />}
           {/* the newest point is always marked: with one poll there is no line yet */}
           <circle cx={x((a ?? end).minute)} cy={y((a ?? end).p)} r={5} fill="var(--ink)" stroke="var(--surface)" strokeWidth={2} />
@@ -68,10 +84,11 @@ export function LiveLine({ points, teams, height = 240 }: { points: LivePoint[];
       )}
       {a && (
         <div className="tooltip" style={{ left: Math.min(Math.max(x(a.minute), 100), W - 100), top: m.t + 4, transform: "translate(-50%, 0)" }}>
-          <div className="tl" style={{ marginBottom: 2 }}>about {clock(a.minute)}</div>
+          <div className="tl" style={{ marginBottom: 2 }}>{exact ? "" : "about "}{clock(a.minute)}</div>
           <div><span className="key" style={{ background: TEAM_COLOR[0] }} /><b className="num">{pc(a.p)}</b> <span className="tl">{teams[0]}</span></div>
           <div><span className="key" style={{ background: TEAM_COLOR[1] }} /><b className="num">{pc(1 - a.p)}</b> <span className="tl">{teams[1]}</span></div>
           <div className="tl" style={{ marginTop: 2 }}>soul lead <b className="num">{Math.abs(a.souls).toLocaleString()}</b> ({a.souls >= 0 ? teams[0] : teams[1]})</div>
+          {a.kills && <div className="tl">kills <b className="num">{a.kills[0]}–{a.kills[1]}</b></div>}
         </div>
       )}
     </div>

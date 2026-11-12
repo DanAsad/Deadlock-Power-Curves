@@ -326,6 +326,27 @@ def run(df: pd.DataFrame) -> dict:
     return result
 
 
+def refit_stream(df: pd.DataFrame) -> None:
+    """Fit and save only the stream model (time split) and update its scores in model_eval.json."""
+    from pipeline.model import STREAM_DIFFS
+    tr, te, info = splits(df)["time"]
+    calib = tr & (df["match_id"] % 10 == 7)
+    stream = fit_model(df, tr & ~calib, calib, "time: stream model", STREAM_DIFFS)
+    save_model(stream, info, "win_model_stream")
+    t = df[te & df["minute"].isin(SNAP_MIN)]
+    y, p, mnt = t["team0_won"].to_numpy(float), stream.predict(t), t["minute"].to_numpy()
+    target = DATA_DIR / "model_eval.json"
+    out = json.loads(target.read_text(encoding="utf-8"))
+    s = out["splits"]["time"]
+    s["stream"] = {**stream.info(), "overall": scores(y, p)}
+    for m in s["minutes"]:
+        k = mnt == m["minute"]
+        m["models"]["stream"] = scores(y[k], p[k])
+        print(f"  min {m['minute']:>2}: stream log loss {m['models']['stream']['log_loss']:.4f} | full {m['models']['unified']['log_loss']:.4f}")
+    print(f"  overall: log loss {s['stream']['overall']['log_loss']:.4f}, accuracy {s['stream']['overall']['accuracy']:.4f}")
+    target.write_text(json.dumps(out), encoding="utf-8")
+
+
 def save_model(model, info: dict, name: str):
     """Keep the newest-day-held-out models for the win-probability system."""
     import joblib
@@ -344,6 +365,7 @@ def main():
     ap.add_argument("--demo", action="store_true")
     ap.add_argument("--days", type=int, default=10, help="complete UTC days to use")
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--stream-only", action="store_true", help="refit only the stream model; keep the other results")
     args = ap.parse_args()
 
     patches = []
@@ -366,6 +388,8 @@ def main():
         source = "deadlock-api data lake"
     df = df[df["queue"].str.lower().isin(["ranked", "unranked"])].reset_index(drop=True)
     print(f"{df['match_id'].nunique():,} matches, {len(df):,} rows over {df['day'].nunique()} days; evaluating…", flush=True)
+    if args.stream_only:
+        return refit_stream(df)
     out = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": source, "days": int(df["day"].nunique()),

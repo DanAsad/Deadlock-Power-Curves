@@ -54,6 +54,15 @@ users browse and filter charts about Deadlock heroes.
   `python -m pipeline.export_web --fixtures`, mirror the change in
   web/src/wp/features.ts, and make `npm run test:parity` pass.
 - "Live games" tab: web/src/pages/LiveGames.tsx polls the live-matches API (no backend).
+  Tracking one match by id: web/src/wp/stream.ts reads the live broadcast query
+  (always with LIMIT; one tick per query) → features.ts streamRow → win_model_stream
+  (model.STREAM_DIFFS: only fields the broadcast has). Check: `npx tsx scripts/stream-check.ts`.
+- Browser player history: web/src/wp/history.ts (public match histories; constants in
+  priors.json `player`). Approximate vs the lake: `npx tsx scripts/history-check.ts`.
+- Scaling index: pp_per_10min is adjusted for hero strength (stats.strength_by_bucket);
+  raw_pp_per_10min is the plain slope and is what the model's draft_scaling uses.
+- `python -m pipeline.evaluate --demo` never overwrites real results; `--stream-only`
+  refits just the stream model.
 - Online: GitHub Pages at https://danasad.github.io/Deadlock-Power-Curves/, static
   mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml.
 - Training rows: snapshot minutes for all matches, every minute for match_id % 5 == 2.
