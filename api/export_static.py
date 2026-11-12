@@ -7,6 +7,7 @@ Layout (slice = queue_rank_period, e.g. ranked_high_all):
   meta.json, model-eval.json
   heroes/<slice>.json, power-curves/<slice>.json, scaling-index/<slice>.json,
   win-factors/<slice>.json
+  win-probability.json (example matches), win-probability/<match_id>.json
 """
 import json
 import sys
@@ -15,7 +16,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 
-from api.routers import model_eval, power_curves, win_factors
+from api.routers import model_eval, power_curves, win_factors, win_probability
 from api.store import store
 
 
@@ -44,6 +45,13 @@ def export(out: Path) -> int:
             write(out / f"{name}.json", fn()); n += 1
         except HTTPException as e:                             # optional table not built yet
             print(f"skipped {name}: {e.detail}")
+    try:                                                       # example matches; no on-demand lookup here
+        listing = {**win_probability.matches(), "lookup": False}
+        write(out / "win-probability.json", listing); n += 1
+        for m in listing["matches"]:
+            write(out / "win-probability" / f"{m['match_id']}.json", win_probability.match(m["match_id"])); n += 1
+    except HTTPException as e:
+        print(f"skipped win-probability: {e.detail}")
     per_slice = {"heroes": power_curves.heroes, "power-curves": lambda s: power_curves.power_curves(s, None),
                  "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors}
     for s in slices():

@@ -19,7 +19,7 @@ const SECTIONS = [
   { to: "/scaling", label: "Scaling index" },
   { to: "/what-wins", label: "What wins games" },
   { to: "/model-check", label: "Model check" },
-  { to: "/win-probability", label: "Win probability", soon: true },
+  { to: "/win-probability", label: "Win probability" },
 ];
 
 function ThemeToggle() {
@@ -51,7 +51,7 @@ function Shell() {
         <nav className="nav">
           {SECTIONS.map((s) => (
             <NavLink key={s.to} to={`${s.to}${search}`} end={s.end}>
-              {s.label}{s.soon && <span className="soon">soon</span>}
+              {s.label}
             </NavLink>
           ))}
         </nav>

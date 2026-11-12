@@ -54,14 +54,15 @@ RAW_SQL = """
            coalesce(low_pri_pool, false) AS low_pri, coalesce(new_player_pool, false) AS new_player,
            coalesce(is_high_skill_range_parties, false) AS wide_party
     FROM dl.main.match_player
-    WHERE start_time >= TIMESTAMPTZ '{day} 00:00:00+00'
-      AND start_time <  TIMESTAMPTZ '{next_day} 00:00:00+00'
+    WHERE {where}
       AND game_mode = 'Normal'
       AND match_mode IN ('Ranked', 'Unranked')
       AND match_outcome = 'TeamWin'
       AND NOT coalesce(not_scored, false)
       AND duration_s >= {min_duration}
 """
+RAW_DAY = "start_time >= TIMESTAMPTZ '{day} 00:00:00+00' AND start_time < TIMESTAMPTZ '{next_day} 00:00:00+00'"
+RAW_MATCHES = "match_id IN ({ids})"          # the lake is partitioned by match_id, so this is a fast lookup
 
 # Runs on the downloaded day (temp table wf_raw).
 DAY_SQL = """

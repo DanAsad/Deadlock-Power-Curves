@@ -208,12 +208,26 @@ Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
   matches) and `win_model_live.joblib` (live fields only; 72.5% vs 73.6%
   accuracy over all snapshot minutes).
 
-## Phase 2: win-probability system (next)
+## Win probability
 
-The models above are the engine. What is left is the product:
+`python -m pipeline.win_probability` builds the per-match graph data in
+`data/win_probability.json`; `--match <id> ...` does it for specific matches.
 
-1. Per-match rows from the match-metadata API (finished matches) or the
-   live-matches API (running games), in the same format as the training rows.
-2. `api/routers/win_probability.py`: win chance per minute for a match id.
-3. The existing `/win-probability` page: the graph, annotated with kills and
-   objectives.
+- **Same rows as training.** A match is pulled from the lake by id and run
+  through the exact SQL that built the training rows, with a row for every
+  minute, then scored by the full model and the live model.
+- **Example matches** are picked from the day the saved model was tested on
+  (never trained on): the biggest comeback, the most lead changes, a stomp, a
+  coin flip, a high-rank ranked match and a typical game.
+- **The page** shows one team's win chance per minute with the area tinted by
+  the team ahead, objectives and Mid-Boss claims per team on the same timeline,
+  kills per minute, a table view, and an optional live-model line.
+- **Any match id:** `GET /api/win-probability/{match_id}` looks the match up in
+  the lake and scores it on the spot (about 15 seconds). This needs the backend,
+  so the GitHub Pages version shows the example matches only.
+- The match-metadata API (`/v1/matches/{id}/metadata`) returns the same fields
+  as the lake (stat snapshots, death times, objectives, Mid-Boss) without the
+  hour's delay; it is the planned source once the site has a hosted backend.
+
+Next: a hosted backend so any match id works online, then a live graph for
+games in progress using the live model.

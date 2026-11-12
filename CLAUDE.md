@@ -45,6 +45,11 @@ users browse and filter charts about Deadlock heroes.
   score per queue as an input, team-flip symmetric, isotonic recalibration).
   evaluate.py trains it and saves data/model/win_model.joblib (all factors) and
   win_model_live.joblib (only fields the live-matches API has).
+- "Win probability" tab: `pipeline/win_probability.py` → data/win_probability.json
+  (example matches) → api/routers/win_probability.py (also scores any match id
+  from the lake on demand) → web/src/pages/WinProbability.tsx + charts/WinProb.tsx.
+- Online: GitHub Pages at https://danasad.github.io/Deadlock-Power-Curves/, static
+  mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml.
 - Training rows: snapshot minutes for all matches, every minute for match_id % 5 == 2.
   Between snapshots stats are carried forward, never interpolated (that leaks).
 - Patch dates: `pipeline/patches.py` → data/patches.json (read by config.PATCHES).
