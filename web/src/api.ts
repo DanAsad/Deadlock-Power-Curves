@@ -29,6 +29,7 @@ export interface CurvePoint {
 export interface Curve { hero_id: number; points: CurvePoint[] }
 
 export interface IndexRow extends Interval {
+  raw_pp_per_10min?: number; raw_ci_low?: number; raw_ci_high?: number;   // before the strength adjustment
   hero_id: number; games: number; win_rate: number; wr_ci_low: number; wr_ci_high: number;
 }
 

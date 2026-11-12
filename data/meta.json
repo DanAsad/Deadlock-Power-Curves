@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-11-10T16:41:53+00:00",
+ "generated_at": "2026-11-12T11:03:44+00:00",
  "source": "deadlock-api data lake",
  "days": 30,
- "first_match": "2026-10-11T01:00:00+01:00",
- "last_match": "2026-11-10T12:47:28+00:00",
+ "first_match": "2026-10-13T01:00:00+01:00",
+ "last_match": "2026-11-12T09:00:59+00:00",
  "bins": [
   {
    "idx": 0,
@@ -85,33 +85,61 @@
    {
     "id": "all",
     "label": "All patches"
+   },
+   {
+    "id": "2026-09-29",
+    "label": "2026-09-29"
    }
   ]
  },
  "sample_sizes": {
   "all|all|all": {
-   "matches": 5902600,
-   "player_rows": 70831200
+   "matches": 5797028,
+   "player_rows": 69564336
+  },
+  "all|all|2026-09-29": {
+   "matches": 5797028,
+   "player_rows": 69564336
   },
   "ranked|all|all": {
-   "matches": 817036,
-   "player_rows": 9804432
+   "matches": 808112,
+   "player_rows": 9697344
+  },
+  "ranked|all|2026-09-29": {
+   "matches": 808112,
+   "player_rows": 9697344
   },
   "unranked|all|all": {
-   "matches": 5085564,
-   "player_rows": 61026768
+   "matches": 4988916,
+   "player_rows": 59866992
+  },
+  "unranked|all|2026-09-29": {
+   "matches": 4988916,
+   "player_rows": 59866992
   },
   "ranked|low|all": {
-   "matches": 400910,
-   "player_rows": 4810920
+   "matches": 394340,
+   "player_rows": 4732080
+  },
+  "ranked|low|2026-09-29": {
+   "matches": 394340,
+   "player_rows": 4732080
   },
   "ranked|mid|all": {
-   "matches": 249748,
-   "player_rows": 2996976
+   "matches": 251593,
+   "player_rows": 3019116
+  },
+  "ranked|mid|2026-09-29": {
+   "matches": 251593,
+   "player_rows": 3019116
   },
   "ranked|high|all": {
-   "matches": 166378,
-   "player_rows": 1996536
+   "matches": 162179,
+   "player_rows": 1946148
+  },
+  "ranked|high|2026-09-29": {
+   "matches": 162179,
+   "player_rows": 1946148
   }
  }
 }
