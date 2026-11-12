@@ -326,6 +326,57 @@ def run(df: pd.DataFrame) -> dict:
     return result
 
 
+SEGMENT_MODELS = [            # (id, label, queue, rank bracket or None)
+    ("ranked", "Ranked", "ranked", None), ("unranked", "Unranked", "unranked", None),
+    ("ranked_low", "Ranked, Initiate–Arcanist", "ranked", "low"),
+    ("ranked_mid", "Ranked, Ritualist–Archon", "ranked", "mid"),
+    ("ranked_high", "Ranked, Oracle–Eternus", "ranked", "high"),
+]
+
+
+def segment_models(df: pd.DataFrame) -> None:
+    """A separate full model per queue and per rank bracket, each tested against the saved
+    shared model on its own held-out matches (time split, snapshot minutes, paired by match).
+    A segment's model is saved as win_model_<id> only when its 95% CI excludes zero."""
+    import joblib
+    tr, te, info = splits(df)["time"]
+    calib = tr & (df["match_id"] % 10 == 7)
+    fit = tr & ~calib
+    shared = joblib.load(DATA_DIR / "model" / "win_model.joblib")
+    q = df["queue"].str.lower()
+    out = []
+    for sid, label, queue, rank in SEGMENT_MODELS:
+        seg = (q == queue) & ((df["rank"] == rank) if rank else True)
+        n_fit, n_test = df.loc[fit & seg, "match_id"].nunique(), df.loc[te & seg, "match_id"].nunique()
+        (DATA_DIR / "model" / f"win_model_{sid}.joblib").unlink(missing_ok=True)
+        (DATA_DIR / "model" / f"win_model_{sid}.json").unlink(missing_ok=True)
+        if n_fit < 20_000 or n_test < 1000:
+            out.append({"id": sid, "label": label, "train_matches": int(n_fit), "matches": int(n_test), "skipped": True})
+            print(f"  {label}: too few matches ({n_fit:,} to train, {n_test:,} to test)", flush=True)
+            continue
+        model = fit_model(df, fit & seg, calib & seg, f"{label} model")
+        t = df[te & seg & df["minute"].isin(SNAP_MIN)]
+        y, ids = t["team0_won"].to_numpy(float), t["match_id"].to_numpy()
+        p_own, p_shared = model.predict(t), shared.predict(t)
+        cmp = paired(row_loss(y, p_shared) - row_loss(y, p_own), ids)          # >0: the segment's own model is better
+        used = bool(cmp["ci_low"] > 0)
+        out.append({"id": sid, "label": label, "train_matches": int(n_fit), "matches": int(len(np.unique(ids))),
+                    "shared": {**scores(y, p_shared), "ece": ece(calibration(p_shared, y))},
+                    "own": {**scores(y, p_own), "ece": ece(calibration(p_own, y))},
+                    "own_vs_shared": cmp, "used": used})
+        if used:
+            save_model(model, info, f"win_model_{sid}")
+        print(f"  {label}: own {out[-1]['own']['log_loss']:.4f} (acc {out[-1]['own']['accuracy']:.4f}) vs shared "
+              f"{out[-1]['shared']['log_loss']:.4f} (acc {out[-1]['shared']['accuracy']:.4f}); gain "
+              f"{cmp['delta_log_loss']:+.4f}, CI {cmp['ci_low']:+.4f} to {cmp['ci_high']:+.4f} -> "
+              f"{'saved' if used else 'not used'}", flush=True)
+        del model
+    target = DATA_DIR / "model_eval.json"
+    res = json.loads(target.read_text(encoding="utf-8"))
+    res["splits"]["time"]["segment_models"] = out
+    target.write_text(json.dumps(res), encoding="utf-8")
+
+
 def refit_stream(df: pd.DataFrame) -> None:
     """Fit and save only the stream model (time split) and update its scores in model_eval.json."""
     from pipeline.model import STREAM_DIFFS
@@ -366,6 +417,7 @@ def main():
     ap.add_argument("--days", type=int, default=10, help="complete UTC days to use")
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--stream-only", action="store_true", help="refit only the stream model; keep the other results")
+    ap.add_argument("--segments-only", action="store_true", help="only test a separate model per queue and rank bracket")
     args = ap.parse_args()
 
     patches = []
@@ -390,6 +442,8 @@ def main():
     print(f"{df['match_id'].nunique():,} matches, {len(df):,} rows over {df['day'].nunique()} days; evaluating…", flush=True)
     if args.stream_only:
         return refit_stream(df)
+    if args.segments_only:
+        return segment_models(df)
     out = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": source, "days": int(df["day"].nunique()),

@@ -209,6 +209,22 @@ loss, lower is better.
   full model trained on ranked matches only was also tested and adds nothing
   on top of that (0.5264 vs 0.5264, 95% CI −0.0004 to +0.0006), so there is
   one model.
+- **A model per queue and per rank bracket** (`python -m pipeline.evaluate
+  --segments-only`). Each was trained on its own matches only and tested
+  against the shared model on the same held-out matches. None is better, and
+  the narrower the group, the worse its own model does, because it has less
+  data to learn from:
+
+  | Trained and tested on | Training matches | Own log loss | Shared log loss | Gain (95% CI) |
+  |---|---|---|---|---|
+  | Ranked | 248k | 0.5264 | 0.5262 | −0.0002 (−0.0007 to +0.0002) |
+  | Unranked | 400k (capped) | 0.5073 | 0.5074 | +0.0001 (−0.0001 to +0.0003) |
+  | Ranked, Initiate–Arcanist | 116k | 0.5145 | 0.5136 | −0.0010 (−0.0022 to +0.0003) |
+  | Ranked, Ritualist–Archon | 89k | 0.5370 | 0.5351 | −0.0030 (−0.0044 to −0.0016) |
+  | Ranked, Oracle–Eternus | 43k | 0.5433 | 0.5378 | −0.0073 (−0.0101 to −0.0045) |
+
+  The shared model already takes the queue as an input and has separate
+  linear weights per queue, so it stays the only full model.
 - **Step 5, every minute.** Training on a row per minute instead of only the
   snapshot minutes lowers log loss between snapshots by 0.012 (95% CI 0.011 to
   0.013). The model is told how old the stats are.
