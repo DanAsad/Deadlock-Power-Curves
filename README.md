@@ -300,8 +300,18 @@ seconds. This works for any match being played, not only the listed ones.
   queue, the 12 players' current stats, and the minimap's objective list.
 - The stream model scores each reading. Objectives that fall between readings
   are marked on the graph; momentum comes from the readings themselves.
-- The graph starts when tracking starts; nothing is stored. After the match
-  ends, the Win probability page can draw the whole game.
+- The broadcast only sends the current state; nothing in it records earlier
+  minutes, so the part before tracking started cannot be filled in while the
+  match runs. The graph instead starts from the pre-game win chance (draft and
+  players, the model at minute 1 with nothing happened yet), joined to the
+  first reading by a dashed "not recorded" line.
+- Readings are kept in the browser (localStorage, 6 hours), so a reload or a
+  closed tab continues the graph.
+- After the match ends, the panel checks every minute for the match's final
+  data and links to the full graph, every minute from the start, on the Win
+  probability page.
+- Not available from the broadcast: the queue flags (new-player, low-priority,
+  wide-skill party), which count as standard queue.
 - API limits per visitor: 6 newly opened matches an hour, 20 queries a minute.
   A broadcast nobody has watched yet takes 10 to 30 seconds to start.
 - `npx tsx scripts/stream-check.ts [match_id]` prints one reading and its row.
