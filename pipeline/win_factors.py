@@ -151,7 +151,7 @@ def fetch_days(days: int, refresh: bool = False, every_minute: bool = False, new
     ph_<day> (games, wins, souls/min per player and hero) and hp_<day> (hero pairs)."""
     from pipeline.extract import MIN_DURATION_S, _rank_sql
     from pipeline.win_factors_sql import (DAY_SQL, HERO_PAIR_SQL, HISTORY_RAW_SQL, OBJECTIVE_KIND,
-                                          PLAYER_HERO_SQL, RAW_SQL, SGN, SNAPSHOT_S)
+                                          PLAYER_HERO_SQL, RAW_DAY, RAW_SQL, SGN, SNAPSHOT_S)
 
     CACHE.mkdir(parents=True, exist_ok=True)
     today = datetime.now(timezone.utc).date()
@@ -166,7 +166,7 @@ def fetch_days(days: int, refresh: bool = False, every_minute: bool = False, new
             rows.append(_read_rows(rp, every_minute).assign(day=pd.Timestamp(d)))
             matches.append(pd.read_parquet(mp))
             continue
-        when = dict(day=d, next_day=d + timedelta(days=1), min_duration=MIN_DURATION_S)
+        when = dict(where=RAW_DAY.format(day=d, next_day=d + timedelta(days=1)), min_duration=MIN_DURATION_S)
         sql = DAY_SQL.format(snapshots=",".join(map(str, SNAPSHOT_S)), mod=MINUTE_SAMPLE[0], rem=MINUTE_SAMPLE[1],
                              kind=OBJECTIVE_KIND, rank=_rank_sql(), sgn=SGN)
         t0 = time.time()
