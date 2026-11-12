@@ -76,9 +76,10 @@ def power_curves(s: SliceDep, hero_id: Annotated[list[int] | None, Query()] = No
 
 @router.get("/scaling-index")
 def scaling_index(s: SliceDep):
-    """Percentage points of win rate per extra 10 minutes, early-game first."""
+    """Percentage points of win rate per extra 10 minutes, early-game first.
+    pp_per_10min is adjusted for hero strength; raw_pp_per_10min is the plain slope."""
     df = _pick(store.fresh().index, s).sort_values("pp_per_10min")
-    cols = ["hero_id", "pp_per_10min", "ci_low", "ci_high", "games", "win_rate", "wr_ci_low", "wr_ci_high"]
+    cols = ["hero_id", "pp_per_10min", "ci_low", "ci_high", "raw_pp_per_10min", "raw_ci_low", "raw_ci_high", "games", "win_rate", "wr_ci_low", "wr_ci_high"]
     return {"slice": s, "sample": _sample(s), "heroes": _records(df, cols)}
 
 

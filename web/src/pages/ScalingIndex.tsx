@@ -21,8 +21,18 @@ export function ScalingIndex() {
       <h1>Scaling index</h1>
       <p className="lede">
         Who gets stronger the longer the game goes? Percentage points of win rate gained per extra 10 minutes of
-        game length: an inverse-variance weighted slope through each hero's power curve, fit only on buckets with
-        at least {meta?.min_games_per_bin.toLocaleString() ?? "–"} games.
+        game length, fit only on buckets with at least {meta?.min_games_per_bin.toLocaleString() ?? "–"} games
+        and <b>adjusted for hero strength</b>.
+      </p>
+      <p className="note">
+        <span aria-hidden>ⓘ</span>
+        <span>
+          <b>Why adjust?</b> Short games are stomps, and the stronger side wins stomps. So a plain slope through
+          the power curve calls every strong hero “early-game” and every weak hero “late-game”: across heroes it
+          correlates about −0.7 with overall win rate. The adjusted index first removes the part of each bucket's
+          win rate that the hero's overall win rate explains (estimated across all heroes), then fits the slope
+          on what is left. The table view shows the plain slope next to it.
+        </span>
       </p>
       <DemoBanner />
       <FilterBar sample={index.data?.sample} />
@@ -44,12 +54,13 @@ export function ScalingIndex() {
           ) : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Hero</th><th>pp / 10 min</th><th>95% CI</th><th>Win rate</th><th>Games</th></tr></thead>
+                <thead><tr><th>Hero</th><th>pp / 10 min (adjusted)</th><th>95% CI</th><th>Plain slope</th><th>Win rate</th><th>Games</th></tr></thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.hero_id}>
                       <td><Link to={`/heroes/${r.hero_id}${search}`}>{byId.get(r.hero_id)?.name ?? `Hero ${r.hero_id}`}</Link></td>
                       <td>{pp(r.pp_per_10min)}</td><td>{pp(r.ci_low)} to {pp(r.ci_high)}</td>
+                      <td>{r.raw_pp_per_10min != null ? pp(r.raw_pp_per_10min) : "–"}</td>
                       <td>{pct(r.win_rate)}</td><td>{int(r.games)}</td>
                     </tr>
                   ))}

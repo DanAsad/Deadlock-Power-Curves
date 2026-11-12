@@ -12,6 +12,8 @@ BIN_MIDS = [17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 55.0]
 MIN_GAMES_PER_BIN = 300             # buckets below this are hidden in the UI
 MIN_BINS_FOR_INDEX = 3              # scaling index needs at least this many shown buckets
 
+MIN_HEROES_FOR_ADJUST = 8           # heroes needed in a bucket to estimate the stomp effect
+
 # Rank brackets from average_badge (tier*10 + subtier). Ranked matches only.
 # Tiers: 1 Initiate, 2 Seeker, 3 Alchemist, 4 Arcanist, 5 Ritualist, 6 Emissary,
 #        7 Archon, 8 Oracle, 9 Phantom, 10 Ascendant, 11 Eternus.

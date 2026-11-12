@@ -29,6 +29,26 @@ def test_demo_recovers_planted_scaling():
     assert (idx["ci_low"] < idx["pp_per_10min"]).all() and (idx["ci_high"] > idx["pp_per_10min"]).all()
 
 
+def test_adjusted_index_ignores_hero_strength():
+    """Heroes with no real scaling, only different strength, in games where short = stomp:
+    the plain slope calls strong heroes early-game, the adjusted index must not."""
+    mids = np.array([17.5, 22.5, 27.5, 32.5, 37.5, 42.5])
+    share = np.array([1.6, 1.4, 1.2, 1.0, 0.7, 0.5])           # how much of the edge shows per bucket
+    rows = []
+    for h in range(20):
+        edge = (h - 9.5) / 200                                  # -4.75pp .. +4.75pp
+        late = 0.004 if h == 19 else 0.0                        # one hero truly gains with length
+        for b in range(6):
+            n = 200_000
+            rows.append((h, b, round(n * (0.5 + share[b] * edge + late * (mids[b] - 30) / 10)), n))
+    curves = power_curves(pd.DataFrame(rows, columns=["hero_id", "bucket_idx", "wins", "games"]))
+    idx = scaling_index(curves).set_index("hero_id")
+    flat = idx.drop(index=19)
+    assert np.corrcoef(flat["raw_pp_per_10min"], flat["win_rate"])[0, 1] < -0.9
+    assert flat["pp_per_10min"].abs().max() < 0.15              # pp per 10 min
+    assert idx.loc[19, "pp_per_10min"] > 0.3 and idx["pp_per_10min"].idxmax() == 19
+
+
 def test_slices_add_up():
     counts, totals = from_frame(make_demo(n_matches=3000))
     s = expand_slices(counts, ["wins", "games"], ["hero_id", "bucket_idx"])

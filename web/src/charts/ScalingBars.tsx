@@ -94,6 +94,7 @@ export function ScalingBars({ rows, heroes, linkSearch }: Props) {
           <div className="tv">{pp(a.pp_per_10min)} / 10 min</div>
           <div className="tl">{heroes.get(a.hero_id)?.name ?? `Hero ${a.hero_id}`}</div>
           <div className="tl">95% CI {pp(a.ci_low)} to {pp(a.ci_high)}</div>
+          {a.raw_pp_per_10min != null && <div className="tl">Before the strength adjustment {pp(a.raw_pp_per_10min)}</div>}
           <div className="tl">Win rate {pct(a.win_rate)} · {int(a.games)} games</div>
         </div>
       )}

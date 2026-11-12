@@ -277,7 +277,9 @@ def hero_priors(before) -> tuple[dict, dict, str]:
             "queue=='all' and rank=='all' and period=='all'")
         src = "data/scaling_index.parquet (overlaps the analysis window; run pipeline.build first)"
         print(f"warning: draft priors from {src}")
-    return dict(zip(idx["hero_id"], idx["pp_per_10min"])), dict(zip(idx["hero_id"], idx["win_rate"])), src
+    # the model was trained on the plain slope; the strength-adjusted one is for the Phase 1 pages
+    col = "raw_pp_per_10min" if "raw_pp_per_10min" in idx else "pp_per_10min"
+    return dict(zip(idx["hero_id"], idx[col])), dict(zip(idx["hero_id"], idx["win_rate"])), src
 
 
 def pair_effects(pairs: pd.DataFrame, prior: float = PAIR_PRIOR) -> tuple[np.ndarray, np.ndarray]:
