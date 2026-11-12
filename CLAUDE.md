@@ -48,6 +48,12 @@ users browse and filter charts about Deadlock heroes.
 - "Win probability" tab: `pipeline/win_probability.py` → data/win_probability.json
   (example matches) → api/routers/win_probability.py (also scores any match id
   from the lake on demand) → web/src/pages/WinProbability.tsx + charts/WinProb.tsx.
+- Browser scoring (static site lookups, and live games everywhere): web/src/wp/
+  re-implements the row building and runs data/web/*.json (pipeline/export_web.py).
+  After changing win_factors_sql.py, the factor list or the model: rerun
+  `python -m pipeline.export_web --fixtures`, mirror the change in
+  web/src/wp/features.ts, and make `npm run test:parity` pass.
+- "Live games" tab: web/src/pages/LiveGames.tsx polls the live-matches API (no backend).
 - Online: GitHub Pages at https://danasad.github.io/Deadlock-Power-Curves/, static
   mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml.
 - Training rows: snapshot minutes for all matches, every minute for match_id % 5 == 2.

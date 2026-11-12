@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:parity": "esbuild scripts/parity.ts --bundle --platform=node --format=esm --outfile=scripts/.parity.mjs --log-level=warning && node scripts/.parity.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b"
   },

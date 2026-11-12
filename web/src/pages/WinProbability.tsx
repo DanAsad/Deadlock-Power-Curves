@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useApi, type HeroesResponse } from "../api";
+import { STATIC, useApi, type HeroesResponse } from "../api";
 import { EVENT_LETTER, TEAM_COLOR, WinProb, type WpEvent, type WpPoint } from "../charts/WinProb";
 import { Loading, ViewToggle } from "../components/ui";
 import { pct } from "../format";
+import { scoreMatch } from "../wp/client";
 
 interface Player { team: number; hero_id: number; kills: number; deaths: number; net_worth: number }
 interface MatchSummary {
@@ -14,7 +15,23 @@ interface MatchSummary {
 interface MatchFull extends MatchSummary { points: WpPoint[]; events: WpEvent[] }
 interface ModelInfo { held_out_day: string | null; saved_at: string | null }
 interface ListResponse { generated_at: string; model: ModelInfo; max_minute: number; lookup: boolean; matches: MatchSummary[] }
-interface MatchResponse { model: ModelInfo; max_minute: number; match: MatchFull }
+interface MatchResponse { model?: ModelInfo; max_minute: number; match: MatchFull }
+
+/** A match scored in the visitor's browser (static site: there is no backend to ask). */
+function useBrowserMatch(id: string | null) {
+  const [state, setState] = useState<{ id: string | null; data: MatchResponse | null; error: string | null; loading: boolean }>(
+    { id: null, data: null, error: null, loading: false });
+  useEffect(() => {
+    if (!id) return;
+    let stale = false;
+    setState({ id, data: null, error: null, loading: true });
+    scoreMatch(id)
+      .then((d) => { if (!stale) setState({ id, data: d, error: null, loading: false }); })
+      .catch((e: Error) => { if (!stale) setState({ id, data: null, error: e.message, loading: false }); });
+    return () => { stale = true; };
+  }, [id]);
+  return state.id === id ? state : { id, data: null, error: null, loading: !!id };
+}
 
 // Team0 / Team1 in the match data
 const TEAMS: [string, string] = ["Hidden King", "Archmother"];
@@ -27,7 +44,12 @@ export function WinProbability() {
   const list = useApi<ListResponse>("win-probability");
   const heroes = useApi<HeroesResponse>("heroes?queue=all&rank=all&period=all");
   const chosen = params.get("match") ?? (list.data?.matches[0] ? String(list.data.matches[0].match_id) : null);
-  const { data, error, loading } = useApi<MatchResponse>(chosen ? `win-probability/${chosen}` : null);
+  // example matches are precomputed; any other id is scored by the backend, or in the browser on the static site
+  const isExample = !!list.data?.matches.some((x) => String(x.match_id) === chosen);
+  const inBrowser = STATIC && !!list.data && !isExample;
+  const viaApi = useApi<MatchResponse>(chosen && list.data && !inBrowser ? `win-probability/${chosen}` : null);
+  const viaBrowser = useBrowserMatch(inBrowser ? chosen : null);
+  const { data, error, loading } = inBrowser ? viaBrowser : viaApi;
   const [query, setQuery] = useState("");
   const [showLive, setShowLive] = useState(false);
   const [view, setView] = useState<"chart" | "table">("chart");
@@ -67,19 +89,19 @@ export function WinProbability() {
         ))}
       </div>
 
-      {list.data?.lookup ? (
+      {list.data && (
         <form className="filters" onSubmit={submit}>
           <div className="filter">
             <label htmlFor="match-id">Any match ID</label>
             <input id="match-id" inputMode="numeric" placeholder="e.g. 135545002" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <button type="submit" className="btn" disabled={!/^\d+$/.test(query.trim())}>Show graph</button>
-          <span className="muted small">Looked up in the data lake and scored on the spot; takes up to a minute. Matches appear about an hour after they end.</span>
+          <span className="muted small">
+            {STATIC
+              ? "Fetched from the Deadlock API and scored in your browser (first use downloads the model, about 3 MB)."
+              : "Looked up in the data lake and scored on the spot; takes up to a minute. Matches appear about an hour after they end."}
+          </span>
         </form>
-      ) : list.data && (
-        <p className="muted small" style={{ margin: "0 0 16px" }}>
-          This online version shows example matches. Looking up any match by ID needs the project running with its backend.
-        </p>
       )}
 
       {error && <p className="error">{error}</p>}
@@ -155,9 +177,15 @@ export function WinProbability() {
                   </table>
                 </div>
               )}
+              {inBrowser && (
+                <p className="muted small" style={{ margin: "6px 0 0" }}>
+                  Scored in your browser, where player history and ranks are not available: every player counts as
+                  average, so the early minutes lean less on who is playing than in the example matches.
+                </p>
+              )}
               {m.truncated && (
                 <p className="muted small" style={{ margin: "6px 0 0" }}>
-                  This match ran past minute {data!.max_minute}, where the model's timeline ends; the line stops there.
+                  This match ran past minute {data?.max_minute ?? 45}, where the model's timeline ends; the line stops there.
                 </p>
               )}
             </div>

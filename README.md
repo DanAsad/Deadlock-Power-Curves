@@ -45,8 +45,10 @@ Live at https://danasad.github.io/Deadlock-Power-Curves/. GitHub Pages has no
 backend, so on every push to `main` the workflow in `.github/workflows/pages.yml`
 builds the frontend in static mode (`VITE_STATIC=1`) and runs
 `python -m api.export_static`, which writes every API response as a JSON file
-from the committed tables in `data/`. To refresh the numbers online: rerun the
-pipeline locally, commit `data/`, push.
+from the committed tables in `data/`. Match lookups and live games are scored in
+the visitor's browser (see Win probability). To refresh the numbers online:
+rerun the pipeline locally (and `python -m pipeline.export_web` after
+retraining), commit `data/`, push.
 
 ## Data
 
@@ -222,12 +224,32 @@ Results on 10 days (2–11 Nov 2026), newest day held out: 1.84M training and
 - **The page** shows one team's win chance per minute with the area tinted by
   the team ahead, objectives and Mid-Boss claims per team on the same timeline,
   kills per minute, a table view, and an optional live-model line.
-- **Any match id:** `GET /api/win-probability/{match_id}` looks the match up in
-  the lake and scores it on the spot (about 15 seconds). This needs the backend,
-  so the GitHub Pages version shows the example matches only.
-- The match-metadata API (`/v1/matches/{id}/metadata`) returns the same fields
-  as the lake (stat snapshots, death times, objectives, Mid-Boss) without the
-  hour's delay; it is the planned source once the site has a hosted backend.
+- **Any match id, with the backend:** `GET /api/win-probability/{match_id}`
+  looks the match up in the lake and scores it on the spot (about 15 seconds).
+- **Any match id, on the static site:** scored in the visitor's browser, see below.
 
-Next: a hosted backend so any match id works online, then a live graph for
-games in progress using the live model.
+### Scoring in the browser (`web/src/wp/`)
+
+The online site has no backend, so the models run in the browser:
+
+- `python -m pipeline.export_web` writes both models (trees, linear weight
+  tables, recalibration map; 1.6 MB each) and the draft tables to `data/web/`.
+- `web/src/wp/features.ts` rebuilds the per-minute rows from the Deadlock API's
+  match metadata, `model.ts` runs the model, `client.ts` ties them together.
+- **Parity test:** `npm run test:parity` (also run in the deploy workflow)
+  checks the browser code against the pipeline on three fixture matches; the
+  win chances agree to 5 decimal places. Refresh fixtures with
+  `python -m pipeline.export_web --fixtures`.
+- **Limits:** player history and ranks are not available in the browser, so
+  those factors count as average; looked-up matches lean less on who is
+  playing than the precomputed examples.
+
+### Live games
+
+The Live games page polls `https://api.deadlock-api.com/v1/matches/active`
+every 30 seconds and runs the live model on each standard 6v6 game: team souls,
+objectives (decoded from the objective masks, whose bit positions equal the
+objective ids), heroes and leavers. It lists the games with their current win
+chance and draws a growing graph for the one you pick. The graph starts when
+the page is opened; nothing is stored. Game time is counted from match
+creation, so it can run a minute or two ahead of the in-game clock.
