@@ -46,7 +46,7 @@ function Shell() {
     <MetaContext.Provider value={meta.data}>
       <header className="header">
         <NavLink to={`/${search}`} className="brand">
-          <img src="/favicon.svg" alt="" width={22} height={22} /> <span>Deadlock Power Curves</span>
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={22} height={22} /> <span>Deadlock Power Curves</span>
         </NavLink>
         <nav className="nav">
           {SECTIONS.map((s) => (
@@ -86,6 +86,6 @@ function Shell() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter><Shell /></BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}><Shell /></BrowserRouter>
   </StrictMode>,
 );
