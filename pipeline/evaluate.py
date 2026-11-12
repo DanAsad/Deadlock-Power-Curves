@@ -50,6 +50,7 @@ for fid, _, _, _, grp in FACTORS:
         GROUPS.setdefault(grp, []).append(fid)
 GROUP_LABELS = {"economy": "Economy", "fights": "Fights", "objectives": "Objectives", "pre-game": "Pre-game"}
 EPS = 1e-12
+SAVE_MODELS = True          # False on --demo when real results exist, so a test run never replaces them
 BANDS = [(1, 15), (16, 30), (31, 45)]
 
 
@@ -242,8 +243,29 @@ def every_minute(df: pd.DataFrame, fit: pd.Series, calib: pd.Series, te: pd.Seri
     return {"matches": int(len(full_ids)), "minutes": minutes, "between_snapshots": bands}
 
 
+def ranked_model(df: pd.DataFrame, fit: pd.Series, calib: pd.Series, te: pd.Series, p_uni: pd.Series) -> dict | None:
+    """Would a boosted model trained on ranked matches only beat the shared one on ranked
+    matches? Saved as win_model_ranked only when the paired 95% CI excludes zero."""
+    ranked = df["queue"].str.lower() == "ranked"
+    if df.loc[fit & ranked, "match_id"].nunique() < 20_000 or df.loc[te & ranked, "match_id"].nunique() < 1000:
+        return None
+    model = fit_model(df, fit & ranked, calib & ranked, "ranked-only model")
+    t = df[te & ranked & df["minute"].isin(SNAP_MIN)]
+    y, ids = t["team0_won"].to_numpy(float), t["match_id"].to_numpy()
+    p_own, p_shared = model.predict(t), p_uni.loc[t.index].to_numpy()
+    cmp = paired(row_loss(y, p_shared) - row_loss(y, p_own), ids)          # >0: ranked-only better
+    out = {"matches": int(len(np.unique(ids))), "train_matches": model.info()["train_matches"],
+           "shared": {**scores(y, p_shared), "ece": ece(calibration(p_shared, y))},
+           "own": {**scores(y, p_own), "ece": ece(calibration(p_own, y))},
+           "own_vs_shared": cmp, "used": bool(cmp["ci_low"] > 0)}
+    print(f"  ranked-only model: log loss {out['own']['log_loss']:.4f} vs shared {out['shared']['log_loss']:.4f} "
+          f"(gain {cmp['delta_log_loss']:+.4f}, CI {cmp['ci_low']:+.4f} to {cmp['ci_high']:+.4f}) -> "
+          f"{'saved' if out['used'] else 'not used'}", flush=True)
+    return out, model
+
+
 def run(df: pd.DataFrame) -> dict:
-    from pipeline.model import LIVE_DIFFS
+    from pipeline.model import LIVE_DIFFS, STREAM_DIFFS
     result = {}
     snap = df["minute"].isin(SNAP_MIN)
     for name, (tr, te, info) in splits(df).items():
@@ -254,9 +276,13 @@ def run(df: pd.DataFrame) -> dict:
         p_uni = pd.Series(model.predict(df[te]), index=df.index[te])
         p_raw = pd.Series(model.predict_raw(df[te]), index=df.index[te])
         p_live = pd.Series(live.predict(df[te]), index=df.index[te])
+        extra_p = {}
         if name == "time":
             save_model(model, info, "win_model")
             save_model(live, info, "win_model_live")
+            stream = fit_model(df, fit, calib, f"{name}: stream model", STREAM_DIFFS)
+            save_model(stream, info, "win_model_stream")
+            extra_p["stream"] = pd.Series(stream.predict(df[te]), index=df.index[te])
         minutes = []
         for mnt in SNAP_MIN:
             at = df["minute"] == mnt
@@ -265,7 +291,8 @@ def run(df: pd.DataFrame) -> dict:
                 continue
             r = evaluate_minute(train, test, {"unified": p_uni.loc[test.index].to_numpy(),
                                               "unified_raw": p_raw.loc[test.index].to_numpy(),
-                                              "live": p_live.loc[test.index].to_numpy()})
+                                              "live": p_live.loc[test.index].to_numpy(),
+                                              **{k: v.loc[test.index].to_numpy() for k, v in extra_p.items()}})
             minutes.append({"minute": int(mnt), **r})
             m = r["models"]
             print(f"  {name:6} min {mnt:>2}: log loss unified {m['unified']['log_loss']:.4f} | per-minute "
@@ -284,6 +311,14 @@ def run(df: pd.DataFrame) -> dict:
             "queue_models": queue_models(df, tr, te) if "queue" in df else [],
         }
         if name == "time":
+            result[name]["stream"] = {**stream.info(), "overall": scores(y, extra_p["stream"].loc[ts.index].to_numpy())}
+            rm = ranked_model(df, fit, calib, te, p_uni) if "queue" in df else None
+            if SAVE_MODELS:
+                (DATA_DIR / "model" / "win_model_ranked.joblib").unlink(missing_ok=True)
+            if rm:
+                result[name]["ranked_model"] = rm[0]
+                if rm[0]["used"]:
+                    save_model(rm[1], info, "win_model_ranked")
             result[name]["every_minute"] = every_minute(df, fit, calib, te, p_uni)
         for s in result[name]["segments"]:
             print(f"  {name:6} {s['label']:26} {s['matches']:>8,} matches | log loss {s['log_loss']:.4f} | "
@@ -294,6 +329,8 @@ def run(df: pd.DataFrame) -> dict:
 def save_model(model, info: dict, name: str):
     """Keep the newest-day-held-out models for the win-probability system."""
     import joblib
+    if not SAVE_MODELS:
+        return
     out = DATA_DIR / "model"
     out.mkdir(exist_ok=True)
     joblib.dump(model, out / f"{name}.joblib")
@@ -310,6 +347,12 @@ def main():
     args = ap.parse_args()
 
     patches = []
+    target = DATA_DIR / "model_eval.json"
+    real = target.exists() and json.loads(target.read_text(encoding="utf-8")).get("source") != "demo"
+    if args.demo and real:
+        global SAVE_MODELS
+        SAVE_MODELS = False
+        print("Real results exist: this demo run will not replace them or the saved models.")
     if args.demo:
         df, source = make_demo(), "demo"
         df["day"] = pd.Timestamp("2026-01-01") + pd.to_timedelta(df["match_id"] % 3, "D")
@@ -332,8 +375,10 @@ def main():
         "new_factors": NEW_FEATS, "flags": FLAGS,
         "splits": run(df),
     }
-    (DATA_DIR / "model_eval.json").write_text(json.dumps(out), encoding="utf-8")
-    print(f"Wrote {DATA_DIR / 'model_eval.json'}")
+    if not SAVE_MODELS:
+        return
+    target.write_text(json.dumps(out), encoding="utf-8")
+    print(f"Wrote {target}")
 
 
 if __name__ == "__main__":

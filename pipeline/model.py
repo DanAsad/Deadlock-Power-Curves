@@ -50,6 +50,10 @@ RANKED_ONLY_DIFFS = {"rank_gap"}
 LIVE_DIFFS = ["souls", "guardians", "walkers", "base_guardians", "shrines", "open_lanes", "deepest_push",
               "enemy_abandons", "draft_scaling", "draft_strength", "draft_synergy", "draft_counter",
               "hero_experience", "player_form", "player_farm", "hero_mastery"]
+# The live broadcast stream (/v1/matches/demo/live/query) has current per-player stats and
+# objective state for any match in progress, but not these: souls dropped on death, total
+# time spent dead, Mid-Boss claims, and the lobby's rank averages.
+STREAM_DIFFS = [d for d in DIFFS if d not in {"enemy_souls_lost", "enemy_dead_time", "mid_boss", "rank_gap"}]
 FREE = {"momentum", "carry_concentration", "draft_scaling"}      # never constrained
 CONTEXT = ["minute", "total_souls", "stale", "ranked", *FLAGS]   # same for both teams
 P_CLIP = 1e-4
