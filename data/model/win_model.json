@@ -176,7 +176,7 @@
  "ranked_table": true,
  "iterations": 500,
  "train_matches": 400000,
- "train_rows": 4793798,
+ "train_rows": 4791803,
  "trained_through": "2026-11-11",
- "saved_at": "2026-11-12T01:49:09+00:00"
+ "saved_at": "2026-11-12T11:25:06+00:00"
 }
