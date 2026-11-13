@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { useApi, type Meta } from "./api";
 import { MetaContext, useSliceSearch } from "./filters";
+import { About, AUTHOR, REPO } from "./pages/About";
 import { AllCurves } from "./pages/AllCurves";
 import { HeroDetail } from "./pages/HeroDetail";
 import { HeroGrid } from "./pages/HeroGrid";
@@ -14,8 +15,6 @@ import { WinProbability } from "./pages/WinProbability";
 import "./styles.css";
 
 // Sections. Phase 2 is already a route; it only needs its page and API router.
-const AUTHOR = { name: "Dan Asad", linkedin: "https://www.linkedin.com/in/danasad/", github: "https://github.com/DanAsad" };
-const REPO = "https://github.com/DanAsad/Deadlock-Power-Curves";
 
 const SECTIONS = [
   { to: "/", label: "Heroes", end: true },
@@ -25,6 +24,7 @@ const SECTIONS = [
   { to: "/model-check", label: "Model check" },
   { to: "/win-probability", label: "Win probability" },
   { to: "/live", label: "Live games" },
+  { to: "/about", label: "About" },
 ];
 
 function ThemeToggle() {
@@ -61,7 +61,7 @@ function Shell() {
           ))}
         </nav>
         <span className="byline">
-          by <a href={AUTHOR.linkedin} target="_blank" rel="noopener noreferrer">{AUTHOR.name}</a>
+          by <NavLink to="/about">{AUTHOR.name}</NavLink>
         </span>
         <ThemeToggle />
       </header>
@@ -81,6 +81,7 @@ function Shell() {
           <Route path="/model-check" element={<ModelCheck />} />
           <Route path="/win-probability" element={<WinProbability />} />
           <Route path="/live" element={<LiveGames />} />
+          <Route path="/about" element={<About />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>
         <footer className="site-footer">
