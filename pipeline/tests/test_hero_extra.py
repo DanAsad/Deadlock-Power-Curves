@@ -76,3 +76,21 @@ def test_at_minute_means_and_ci():
     assert abs((r["lead_high"] - r["lead_low"]) / 2 - half) < 1e-6
     assert bool(r["enough"])
     assert set(out["queue"]) == {"all", "ranked"}                     # no unranked rows from ranked-only data
+
+
+def test_pairs_build_slices_and_drops_leavers():
+    from pipeline.hero_pairs import build
+    rng = np.random.default_rng(4)
+    base = _pairs(rng, heroes=8, n=15_000)
+    rows = []
+    for queue, rank, leaver in (("Ranked", "mid", False), ("Unranked", "none", False), ("Unranked", "none", True)):
+        rows.append(base.assign(day=pd.Timestamp("2026-11-01"), queue=queue, rank=rank, leaver=leaver,
+                                wins=base["n"] if leaver else base["wins"]))        # leaver rows: h1 always wins
+    t = build(pd.concat(rows, ignore_index=True))
+    assert {"all", "ranked", "unranked"} <= set(t["queue"]) and "mid" in set(t["rank"])
+    a = t[(t["queue"] == "all") & (t["rank"] == "all") & (t["period"] == "all")]
+    u = t[(t["queue"] == "unranked") & (t["rank"] == "all") & (t["period"] == "all")]
+    # the leaver rows (h1 wins every game) would push effects far off; without them all queues = 2x one queue
+    assert a["effect"].abs().max() < 5
+    m = a.merge(u, on=["hero", "other", "kind"], suffixes=("", "_u"))
+    assert (m["n"] == 2 * m["n_u"]).all()

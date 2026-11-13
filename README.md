@@ -51,8 +51,12 @@ Findings along the way:
 | Win probability for a finished match | Live games and match tracking |
 |---|---|
 | ![Win probability](docs/screenshots/win-probability.png) | ![Live games](docs/screenshots/live.png) |
-| **Scaling index, adjusted for hero strength** | **Model check: every result on held-out data** |
+| **Scaling by game minute: who farms into the late game** | **Model check: every result on held-out data** |
 | ![Scaling index](docs/screenshots/scaling.png) | ![Model check](docs/screenshots/model-check.png) |
+
+**A hero page:** win rate by game length, strength at each minute, and best and worst partners and match-ups
+
+![Hero page](docs/screenshots/hero.png)
 
 ## How it works
 
@@ -186,13 +190,15 @@ retraining), commit `data/`, push.
   Zero is the average hero; one row per hero per match,
   so the 95% CI is mean ± 1.96·sd/√n. Only matches still running at a minute
   count there, so late minutes lean toward closer games.
-- **Partners and match-ups** (`python -m pipeline.hero_pairs`, hero pages).
-  For each pair of heroes, together or against each other, the win rate beyond
-  what the two heroes' own win rates predict, in percentage points, with a 95%
-  CI; pairs need 1,000+ games. Ordered by the effect shrunk toward zero by
-  2,000 pseudo-games, which is exactly what the win model's draft-synergy and
-  draft-counter factors use (checked in `pipeline/tests/test_hero_extra.py`).
-  Most effects are within ±2 points.
+- **Partners and match-ups** (`python -m pipeline.hero_pairs --days 30`, hero
+  pages). For each pair of heroes, together or against each other, the win rate
+  beyond what the two heroes' own win rates predict, in percentage points, with
+  a 95% CI; pairs need 1,000+ games. Its own lake pull (cache `pp_<day>`) with
+  queue, rank and leaver flags, so it follows the page filters and leaves out
+  matches where someone left, like the power curves. Ordered by the effect
+  shrunk toward zero by 2,000 pseudo-games, the same shrinkage the win model's
+  draft factors use (the model keeps its own pair caches, which it was trained
+  on). Most effects are within ±3 points.
 - **Scaling by game minute** (Scaling index page, "By game minute"): each
   hero's own souls vs the match average at minute 30 minus at minute 12. It
   ignores game length, so stomps can't bias it; it ranks who farms into the late
