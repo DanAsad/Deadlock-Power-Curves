@@ -37,17 +37,20 @@ def at_minute(s: SliceDep, hero_id: Annotated[list[int] | None, Query()] = None)
     return {"slice": s, "sample": _sample(s), "curves": curves}
 
 
+PAIR_COLS = ["other", "n", "win_rate", "expected", "effect", "ci_low", "ci_high"]
+
+
 @router.get("/hero-pairs")
-def hero_pairs():
-    """Every hero's partners ("with") and match-ups ("against"): effect in percentage
-    points beyond the two heroes' own win rates, 95% CI, games; best first."""
-    df = _table("hero_pairs", "python -m pipeline.hero_pairs")
+def hero_pairs(s: SliceDep):
+    """Every hero's partners ("with") and match-ups ("against") in the selected slice:
+    effect in percentage points beyond the two heroes' own win rates, 95% CI, games;
+    best first. Rows are arrays in the order of `cols` (keeps the static files small)."""
+    df = _pick(_table("hero_pairs", "python -m pipeline.hero_pairs"), s)
     meta_f = DATA_DIR / "hero_pairs.json"
     meta = json.loads(meta_f.read_text(encoding="utf-8")) if meta_f.exists() else {}
-    cols = ["other", "n", "win_rate", "expected", "effect", "ci_low", "ci_high"]      # rows come best first (by shrunk)
     df = df.round({"win_rate": 4, "expected": 4, "effect": 2, "ci_low": 2, "ci_high": 2})
     heroes = {}
     for h, g in df.groupby("hero"):
-        heroes[str(int(h))] = {k: _records(g[g["kind"] == k].sort_values("shrunk", ascending=False), cols)
+        heroes[str(int(h))] = {k: g[g["kind"] == k].sort_values("shrunk", ascending=False)[PAIR_COLS].values.tolist()
                                for k in ("with", "against")}
-    return {**meta, "heroes": heroes}
+    return {**meta, "slice": s, "cols": PAIR_COLS, "heroes": heroes}

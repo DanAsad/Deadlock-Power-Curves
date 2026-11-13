@@ -61,7 +61,9 @@ users browse and filter charts about Deadlock heroes.
   priors.json `player`). Approximate vs the lake: `npx tsx scripts/history-check.ts`.
 - Hero pages also show strength at each minute (`pipeline/at_minute.py` → data/at_minute.parquet,
   cache am_<day>; api/routers/hero_extra.py /at-minute) and partners/match-ups
-  (`pipeline/hero_pairs.py` from the hp_* caches → data/hero_pairs.parquet; /hero-pairs).
+  (`pipeline/hero_pairs.py`, own pull, cache pp_<day> with queue/rank/leaver → data/hero_pairs.parquet;
+  /hero-pairs per slice). The win model's hp_* caches stay separate (the model was trained on them).
+- Power curves, minute curves and pairs leave out matches where someone left (build.LEAVERS).
   UI: web/src/components/HeroExtras.tsx, charts/AtMinute.tsx.
 - Scaling index: pp_per_10min is adjusted for hero strength (stats.strength_by_bucket);
   raw_pp_per_10min is the plain slope and is what the model's draft_scaling uses.

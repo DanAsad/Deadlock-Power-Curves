@@ -105,7 +105,7 @@ export function HeroDetail() {
       </Loading>
       <div style={{ marginTop: 16 }}><LengthCaveat /></div>
       <HeroAtMinute id={id} name={name} slice={slice} />
-      <HeroPairs id={id} name={name} heroes={byId} search={search} />
+      <HeroPairs id={id} name={name} heroes={byId} search={search} slice={slice} />
     </>
   );
 }

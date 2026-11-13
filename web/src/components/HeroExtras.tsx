@@ -13,9 +13,12 @@ interface AtMinuteRow {
 interface AtMinuteResponse { curves: { hero_id: number; points: AtMinuteRow[] }[] }
 interface PairRow { other: number; n: number; win_rate: number; expected: number; effect: number; ci_low: number; ci_high: number }
 interface PairsResponse {
-  first_day: string; last_day: string; min_games: number;
-  heroes: Record<string, { with: PairRow[]; against: PairRow[] }>;
+  first_day: string; last_day: string; min_games: number; leavers_excluded?: boolean;
+  cols: string[];                                             // order of the values in each row
+  heroes: Record<string, { with: number[][]; against: number[][] }>;
 }
+const toRows = (cols: string[], rows: number[][]): PairRow[] =>
+  rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])) as unknown as PairRow);
 
 const signed = (v: number, d = 1) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(d)}`;
 
@@ -112,10 +115,11 @@ function PairTable({ rows, heroes, search, verb }: { rows: PairRow[]; heroes: Ma
   );
 }
 
-export function HeroPairs({ id, name, heroes, search }: { id: number; name: string; heroes: Map<number, Hero>; search: string }) {
-  const r = useApi<PairsResponse>("hero-pairs");
+export function HeroPairs({ id, name, heroes, search, slice }: { id: number; name: string; heroes: Map<number, Hero>; search: string; slice: Slice }) {
+  const r = useApi<PairsResponse>(`hero-pairs?${sliceQuery(slice)}`);
   const [all, setAll] = useState(false);
-  const mine = r.data?.heroes[String(id)];
+  const raw = r.data?.heroes[String(id)];
+  const mine = raw && r.data ? { with: toRows(r.data.cols, raw.with), against: toRows(r.data.cols, raw.against) } : undefined;
   const pick = (rows: PairRow[]) => (all ? rows : [...rows.slice(0, 5), ...rows.slice(-5)]);
   const blocks: [string, string, string, PairRow[]][] = mine ? [
     ["Partners", `On the same team as ${name}`, "With", mine.with],
@@ -129,13 +133,15 @@ export function HeroPairs({ id, name, heroes, search }: { id: number; name: stri
           <h2>Best and worst partners and match-ups</h2>
           <span className="muted small">
             How much more (or less) often {name}'s side wins than the two heroes' own win rates predict, in percentage points.
-            {r.data && <> All queues, {r.data.first_day} to {r.data.last_day}; pairs with at least {int(r.data.min_games)} games.</>}
+            {r.data && <> {r.data.first_day} to {r.data.last_day}, for the filters above; pairs with at least {int(r.data.min_games)} games
+              {r.data.leavers_excluded && ", matches where someone left not counted"}.</>}
           </span>
         </div>
         <button className="btn" onClick={() => setAll((v) => !v)}>{all ? "Top and bottom 5" : "Show all"}</button>
       </div>
       {r.error && <p className="error">{r.error}</p>}
       <Loading loading={r.loading}>
+        {r.data && !mine && <p className="muted">No pairs with enough games for {name} in this slice.</p>}
         <div className="pair-grid">
           {blocks.map(([title, sub, verb, rows]) => (
             <div key={title}>
@@ -147,7 +153,7 @@ export function HeroPairs({ id, name, heroes, search }: { id: number; name: stri
         </div>
       </Loading>
       <p className="muted small" style={{ margin: "10px 0 0" }}>
-        Ordered by the effect pulled toward zero for pairs with fewer games, the same numbers the win model uses for draft
+        Ordered by the effect pulled toward zero for pairs with fewer games, the same way the win model treats draft
         synergy and counters. Most effects are within ±2 points: the draft matters, but no pair decides a game.
       </p>
     </div>
