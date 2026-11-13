@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-11-12T11:03:44+00:00",
+ "generated_at": "2026-11-13T15:37:06+00:00",
  "source": "deadlock-api data lake",
  "days": 30,
- "first_match": "2026-10-13T01:00:00+01:00",
- "last_match": "2026-11-12T09:00:59+00:00",
+ "first_match": "2026-10-14T01:00:00+01:00",
+ "last_match": "2026-11-13T13:41:05+00:00",
  "bins": [
   {
    "idx": 0,
@@ -47,6 +47,8 @@
   }
  ],
  "min_games_per_bin": 300,
+ "leaver_matches_excluded": 659557,
+ "leaver_share": 0.1053,
  "min_bins_for_index": 3,
  "filters": {
   "queue": [
@@ -94,52 +96,52 @@
  },
  "sample_sizes": {
   "all|all|all": {
-   "matches": 5797028,
-   "player_rows": 69564336
+   "matches": 5601921,
+   "player_rows": 67223052
   },
   "all|all|2026-09-29": {
-   "matches": 5797028,
-   "player_rows": 69564336
+   "matches": 5601921,
+   "player_rows": 67223052
   },
   "ranked|all|all": {
-   "matches": 808112,
-   "player_rows": 9697344
+   "matches": 823259,
+   "player_rows": 9879108
   },
   "ranked|all|2026-09-29": {
-   "matches": 808112,
-   "player_rows": 9697344
+   "matches": 823259,
+   "player_rows": 9879108
   },
   "unranked|all|all": {
-   "matches": 4988916,
-   "player_rows": 59866992
+   "matches": 4778662,
+   "player_rows": 57343944
   },
   "unranked|all|2026-09-29": {
-   "matches": 4988916,
-   "player_rows": 59866992
+   "matches": 4778662,
+   "player_rows": 57343944
   },
   "ranked|low|all": {
-   "matches": 394340,
-   "player_rows": 4732080
+   "matches": 397934,
+   "player_rows": 4775208
   },
   "ranked|low|2026-09-29": {
-   "matches": 394340,
-   "player_rows": 4732080
+   "matches": 397934,
+   "player_rows": 4775208
   },
   "ranked|mid|all": {
-   "matches": 251593,
-   "player_rows": 3019116
+   "matches": 263772,
+   "player_rows": 3165264
   },
   "ranked|mid|2026-09-29": {
-   "matches": 251593,
-   "player_rows": 3019116
+   "matches": 263772,
+   "player_rows": 3165264
   },
   "ranked|high|all": {
-   "matches": 162179,
-   "player_rows": 1946148
+   "matches": 161553,
+   "player_rows": 1938636
   },
   "ranked|high|2026-09-29": {
-   "matches": 162179,
-   "player_rows": 1946148
+   "matches": 161553,
+   "player_rows": 1938636
   }
  }
 }

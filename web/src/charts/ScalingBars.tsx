@@ -7,7 +7,12 @@ import { int, pct, pp } from "../format";
 import { useWidth } from "../components/ui";
 import { linear, niceStep, ticks } from "./scale";
 
-interface Props { rows: IndexRow[]; heroes: Map<number, Hero>; linkSearch: string }
+interface Props {
+  rows: IndexRow[]; heroes: Map<number, Hero>; linkSearch: string;
+  fmt?: (v: number, digits?: number) => string;   // default: percentage points
+  unit?: string;                                  // after the value in labels, default "per 10 minutes"
+  tooltip?: (r: IndexRow) => string[];            // default: CI, win rate and games
+}
 
 const ROW = 24, BAR = 12, TOP = 22, R = 4;
 
@@ -21,7 +26,7 @@ export function barPath(x0: number, x1: number, yc: number) {
          `A${r},${r} 0 0 ${dir > 0 ? 1 : 0} ${xe},${y + BAR}H${x0}Z`;
 }
 
-export function ScalingBars({ rows, heroes, linkSearch }: Props) {
+export function ScalingBars({ rows, heroes, linkSearch, fmt = pp, unit = "per 10 minutes", tooltip }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const nav = useNavigate();
@@ -48,7 +53,7 @@ export function ScalingBars({ rows, heroes, linkSearch }: Props) {
               <g key={t}>
                 <line x1={x(t)} x2={x(t)} y1={TOP - 4} y2={H - 8} shapeRendering="crispEdges"
                       stroke={Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)"} />
-                <text x={x(t)} y={TOP - 10} textAnchor="middle">{t === 0 ? "0" : pp(t, step < 1 ? 1 : 0)}</text>
+                <text x={x(t)} y={TOP - 10} textAnchor="middle">{t === 0 ? "0" : fmt(t, step < 1 ? 1 : 0)}</text>
               </g>
             ))}
           </g>
@@ -60,7 +65,7 @@ export function ScalingBars({ rows, heroes, linkSearch }: Props) {
             const go = () => nav(`/heroes/${r.hero_id}${linkSearch}`);
             return (
               <g key={r.hero_id} role="listitem" tabIndex={0} style={{ cursor: "pointer" }}
-                 aria-label={`${name}: ${pp(r.pp_per_10min)} per 10 minutes, 95% CI ${pp(r.ci_low)} to ${pp(r.ci_high)}`}
+                 aria-label={`${name}: ${fmt(r.pp_per_10min)} ${unit}, 95% CI ${fmt(r.ci_low)} to ${fmt(r.ci_high)}`}
                  onPointerEnter={() => setActive(i)} onPointerLeave={() => setActive(null)}
                  onFocus={() => setActive(i)} onBlur={() => setActive(null)}
                  onClick={go} onKeyDown={(e) => e.key === "Enter" && go()}>
@@ -81,7 +86,7 @@ export function ScalingBars({ rows, heroes, linkSearch }: Props) {
                 {labelled.has(i) && !narrow && (
                   <text x={early ? x(r.ci_low) - 6 : x(r.ci_high) + 6} y={yc(i)} dy="0.32em" fontSize={11}
                         textAnchor={early ? "end" : "start"} fill="var(--ink-2)" className="num">
-                    {pp(r.pp_per_10min, 1)}
+                    {fmt(r.pp_per_10min, 1)}
                   </text>
                 )}
               </g>
@@ -91,11 +96,15 @@ export function ScalingBars({ rows, heroes, linkSearch }: Props) {
       )}
       {a && (
         <div className="tooltip" style={{ left: x(a.pp_per_10min), top: yc(active!) - 6 }}>
-          <div className="tv">{pp(a.pp_per_10min)} / 10 min</div>
+          <div className="tv">{fmt(a.pp_per_10min)} {unit === "per 10 minutes" ? "/ 10 min" : ""}</div>
           <div className="tl">{heroes.get(a.hero_id)?.name ?? `Hero ${a.hero_id}`}</div>
-          <div className="tl">95% CI {pp(a.ci_low)} to {pp(a.ci_high)}</div>
-          {a.raw_pp_per_10min != null && <div className="tl">Before the strength adjustment {pp(a.raw_pp_per_10min)}</div>}
-          <div className="tl">Win rate {pct(a.win_rate)} · {int(a.games)} games</div>
+          {tooltip ? tooltip(a).map((l) => <div key={l} className="tl">{l}</div>) : (
+            <>
+              <div className="tl">95% CI {pp(a.ci_low)} to {pp(a.ci_high)}</div>
+              {a.raw_pp_per_10min != null && <div className="tl">Before the strength adjustment {pp(a.raw_pp_per_10min)}</div>}
+              <div className="tl">Win rate {pct(a.win_rate)} · {int(a.games)} games</div>
+            </>
+          )}
         </div>
       )}
     </div>

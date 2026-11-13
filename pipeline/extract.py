@@ -6,8 +6,11 @@ one UTC day at a time, each with a timeout and retries, and caches that day's
 aggregated counts in data/cache/. Reruns only fetch days not cached yet (plus
 the most recent ones, which are still filling in).
 
-Only aggregated counts (day x hero x queue x rank x length bucket) come back to
-Python. Patches are assigned afterwards from the day (see assign_period), so
+Only aggregated counts (day x hero x queue x rank x length bucket x leaver) come
+back to Python. `leaver` = someone in the match abandoned it. Those matches are
+left out of the power curves (see LEAVERS in build.py): 86% of games under 20
+minutes have a leaver, and the leaver's team wins 0.2% of them, so short games
+said more about who quits than about heroes. Patches are assigned afterwards from the day (see assign_period), so
 editing PATCHES never needs a re-download.
 """
 import threading
@@ -30,7 +33,7 @@ RETRIES = 3
 LAKE_DAY = """
 WITH raw AS (
     SELECT match_id, hero_id, won, duration_s, start_time, average_badge,
-           match_mode::VARCHAR AS queue
+           match_mode::VARCHAR AS queue, coalesce(abandon_match_time_s, 0) > 0 AS abandoned
     FROM dl.main.match_player
     WHERE start_time >= TIMESTAMPTZ '{day} 00:00:00+00'
       AND start_time <  TIMESTAMPTZ '{next_day} 00:00:00+00'
@@ -44,7 +47,7 @@ dedup AS (          -- the lake can hold unmerged duplicate rows
     SELECT * FROM raw
     QUALIFY row_number() OVER (PARTITION BY match_id, hero_id ORDER BY start_time) = 1
 )
-SELECT * FROM dedup  -- keep complete matches only: 12 players, 6 winners
+SELECT * EXCLUDE (abandoned), bool_or(abandoned) OVER (PARTITION BY match_id) AS leaver FROM dedup  -- keep complete matches only: 12 players, 6 winners
 QUALIFY count(*) OVER (PARTITION BY match_id) = 12
     AND sum(won::INT) OVER (PARTITION BY match_id) = 6
 """
@@ -63,13 +66,13 @@ def _rank_sql():
 
 AGG = """
 SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day,
-       hero_id::INT AS hero_id, queue, {rank} AS rank, {bucket} AS bucket_idx,
+       hero_id::INT AS hero_id, queue, {rank} AS rank, {bucket} AS bucket_idx, leaver,
        sum(won::INT)::BIGINT AS wins, count(*)::BIGINT AS games
 FROM players GROUP BY ALL
 """
 
 TOTALS = """
-SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, queue, {rank} AS rank,
+SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, queue, {rank} AS rank, leaver,
        count(DISTINCT match_id) AS matches, count(*) AS player_rows,
        min(start_time) AS first_match, max(start_time) AS last_match
 FROM players GROUP BY ALL
@@ -111,16 +114,20 @@ def _connect():
     from pipeline.lake import connect
     con = connect()
     con.execute("SET http_timeout = 60; SET http_retries = 5; SET http_retry_wait_ms = 500;")
+    # cap DuckDB's memory and let it spill to disk (uncapped, a day of stat lists took over 20 GB)
+    tmp = (DATA_DIR / "cache" / "duckdb_tmp").as_posix()
+    con.execute(f"SET memory_limit = '8GB'; SET preserve_insertion_order = false; SET temp_directory = '{tmp}';")
     return con
 
 
-def fetch_day(day: date, con=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def fetch_day(day: date, con=None) -> tuple[tuple[pd.DataFrame, pd.DataFrame], "duckdb.DuckDBPyConnection"]:
+    """(counts, totals) for one day, and the connection to keep using (a failed attempt replaces it)."""
     sql = LAKE_DAY.format(day=day, next_day=day + timedelta(days=1), min_duration=MIN_DURATION_S)
     last = None
     for attempt in range(1, RETRIES + 1):
         con = con or _connect()
         try:
-            return _run_with_timeout(con, lambda c: aggregate(c, sql), DAY_TIMEOUT_S)
+            return _run_with_timeout(con, lambda c: aggregate(c, sql), DAY_TIMEOUT_S), con
         except Exception as e:      # timeout (interrupt), HTTP errors, dropped connections
             last = e
             print(f"  {day}: attempt {attempt} failed ({str(e).splitlines()[0][:120]})", flush=True)
@@ -133,6 +140,12 @@ def fetch_day(day: date, con=None) -> tuple[pd.DataFrame, pd.DataFrame]:
     raise RuntimeError(f"{day}: gave up after {RETRIES} attempts") from last
 
 
+def _has_leaver(path) -> bool:
+    """Caches from before the leaver flag are refetched."""
+    import pyarrow.parquet as pq
+    return "leaver" in pq.read_schema(path).names
+
+
 def from_lake(days: int, refresh: bool = False):
     """Aggregated counts for the last `days` complete-or-recent UTC days."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -142,14 +155,14 @@ def from_lake(days: int, refresh: bool = False):
     for d in wanted:
         c_path, t_path = CACHE_DIR / f"counts_{d}.parquet", CACHE_DIR / f"totals_{d}.parquet"
         final = (today - d).days >= FINAL_AFTER_DAYS
-        if final and not refresh and c_path.exists() and t_path.exists():
+        if final and not refresh and c_path.exists() and t_path.exists() and _has_leaver(c_path):
             counts.append(pd.read_parquet(c_path)); totals.append(pd.read_parquet(t_path))
             continue
         t0 = time.time()
         try:
             if con is None:
                 con = _connect()
-            c, t = fetch_day(d, con)
+            (c, t), con = fetch_day(d, con)
         except RuntimeError as e:
             print(f"  {e}; skipping this day", flush=True)
             failed.append(d); con = None
@@ -172,6 +185,8 @@ def from_lake(days: int, refresh: bool = False):
 def from_frame(df: pd.DataFrame):
     """Same aggregation on an in-memory player table (demo / tests)."""
     con = duckdb.connect()
+    if "leaver" not in df:
+        df = df.assign(leaver=False)
     con.register("players_df", df)
     counts, totals = aggregate(con, "SELECT * FROM players_df")
     return assign_period(counts), assign_period(totals)

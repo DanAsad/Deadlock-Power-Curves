@@ -24,6 +24,8 @@ from pipeline.heroes import fetch_heroes, hero_table
 from pipeline.stats import power_curves, scaling_index
 
 KEYS = ["queue", "rank", "period", "hero_id"]
+# Matches where someone left are not counted: they decide most short games (see extract.py).
+LEAVERS = False
 
 # (queue filter, rank filter) pairs the UI offers. Rank only exists for Ranked.
 QUEUE_RANK = [("all", "all"), ("ranked", "all"), ("unranked", "all")] + \
@@ -57,6 +59,11 @@ def expand_slices(df: pd.DataFrame, value_cols: list[str], by: list[str]) -> pd.
 
 def build(counts: pd.DataFrame, totals: pd.DataFrame, assets: dict, source: dict):
     C.DATA_DIR.mkdir(exist_ok=True)
+    left = totals.loc[totals["leaver"].astype(bool), "matches"].sum() if "leaver" in totals else 0
+    all_matches = totals["matches"].sum()
+    if not LEAVERS and "leaver" in counts:
+        counts = counts[~counts["leaver"].astype(bool)]
+        totals = totals[~totals["leaver"].astype(bool)]
     sliced = expand_slices(counts, ["wins", "games"], ["hero_id", "bucket_idx"])
     curves = power_curves(sliced, KEYS)
     index = scaling_index(curves, KEYS)
@@ -75,6 +82,7 @@ def build(counts: pd.DataFrame, totals: pd.DataFrame, assets: dict, source: dict
         "first_match": span[0].isoformat(), "last_match": span[1].isoformat(),
         "bins": [{"idx": i, "label": l, "mid_min": m} for i, (l, m) in enumerate(zip(C.BIN_LABELS, C.BIN_MIDS))],
         "min_games_per_bin": C.MIN_GAMES_PER_BIN,
+        "leaver_matches_excluded": int(left), "leaver_share": round(float(left / max(all_matches, 1)), 4),
         "min_bins_for_index": C.MIN_BINS_FOR_INDEX,
         "filters": {
             "queue": [{"id": "all", "label": "All queues"}, {"id": "ranked", "label": "Ranked"},
