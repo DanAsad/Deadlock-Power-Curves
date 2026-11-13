@@ -6,7 +6,7 @@
 Layout (slice = queue_rank_period, e.g. ranked_high_all):
   meta.json, model-eval.json
   heroes/<slice>.json, power-curves/<slice>.json, scaling-index/<slice>.json,
-  win-factors/<slice>.json
+  win-factors/<slice>.json, at-minute/<slice>.json, hero-pairs.json
   win-probability.json (example matches), win-probability/<match_id>.json
   web-model/<name>.json (models and draft tables run in the browser)
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 
-from api.routers import model_eval, power_curves, win_factors, win_probability
+from api.routers import hero_extra, model_eval, power_curves, win_factors, win_probability
 from api.store import store
 
 
@@ -42,7 +42,7 @@ def write(path: Path, payload) -> None:
 def export(out: Path) -> int:
     n = 0
     write(out / "meta.json", power_curves.meta()); n += 1
-    for name, fn in (("model-eval", model_eval.model_eval),):
+    for name, fn in (("model-eval", model_eval.model_eval), ("hero-pairs", hero_extra.hero_pairs)):
         try:
             write(out / f"{name}.json", fn()); n += 1
         except HTTPException as e:                             # optional table not built yet
@@ -62,7 +62,8 @@ def export(out: Path) -> int:
         else:
             print(f"skipped web-model/{name}: run python -m pipeline.export_web")
     per_slice = {"heroes": power_curves.heroes, "power-curves": lambda s: power_curves.power_curves(s, None),
-                 "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors}
+                 "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors,
+                 "at-minute": lambda s: hero_extra.at_minute(s, None)}
     for s in slices():
         key = f"{s.queue}_{s.rank}_{s.period}"
         for name, fn in per_slice.items():

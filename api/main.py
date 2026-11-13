@@ -11,13 +11,14 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routers import model_eval, power_curves, win_factors, win_probability
+from api.routers import model_eval, power_curves, win_factors, win_probability, hero_extra
 
 app = FastAPI(title="Deadlock analytics API", version="0.1.0")
 app.include_router(power_curves.router, prefix="/api")
 app.include_router(win_factors.router, prefix="/api")
 app.include_router(model_eval.router, prefix="/api")
 app.include_router(win_probability.router, prefix="/api")
+app.include_router(hero_extra.router, prefix="/api")
 
 
 @app.get("/api/health")
