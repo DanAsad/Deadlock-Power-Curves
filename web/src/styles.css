@@ -258,3 +258,11 @@ tr.dim td { color: var(--muted); }
 .site-footer .credits b { color: var(--ink); font-weight: 600; }
 .site-footer .links { display: flex; gap: 14px; }
 @media (max-width: 640px) { .byline { display: none; } }
+
+/* About page */
+.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.about-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.about-list b { color: var(--ink); font-weight: 600; }
+.about-author { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.about-author .links { display: flex; flex-wrap: wrap; gap: 8px; }
+.about-author .btn { text-decoration: none; }

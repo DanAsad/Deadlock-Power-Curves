@@ -1,14 +1,84 @@
-# Deadlock analytics: hero power curves → win-probability model
+# Deadlock Power Curves: who scales, and who's winning
 
-Portfolio project on Deadlock match data from the free
-[Deadlock API](https://deadlock-api.com) public data lake. Not affiliated with Valve.
+**[Open the live site →](https://danasad.github.io/Deadlock-Power-Curves/)**
 
-**By Dan Asad** · [LinkedIn](https://www.linkedin.com/in/danasad/) · [GitHub](https://github.com/DanAsad) ·
-live site: https://danasad.github.io/Deadlock-Power-Curves/
+A data science portfolio project by **Dan Asad** · [LinkedIn](https://www.linkedin.com/in/danasad/) · [GitHub](https://github.com/DanAsad)
 
-**Phase 1 (this repo):** win rate by game length for every hero, with 95%
-confidence intervals and a scaling index (early-game vs late-game), browsable in
-a web app with patch / queue / rank filters.
+Deadlock is Valve's 6v6 hero shooter. This project asks two questions of millions
+of public matches:
+
+1. **Which heroes get stronger as a game goes on?** Win rate by game length for
+   every hero, with 95% confidence intervals, and a scaling index adjusted so
+   that strong heroes winning stomps doesn't count as "early-game".
+2. **Who is going to win, from any moment in a game?** A win-probability model
+   that draws a minute-by-minute graph for any finished match, and follows any
+   match being played right now.
+
+Data from the free [Deadlock API](https://deadlock-api.com) public data lake.
+Not affiliated with Valve.
+
+## Headline results
+
+| | |
+|---|---|
+| Matches analysed (power curves, 30 days) | **5.8 million** |
+| Win model trained on / tested on | 1.8M matches / 146k matches from a later day it never saw |
+| Winner picked correctly | **65%** at minute 3 · **72%** at minute 15 · **82%** at minute 30 |
+| Calibration error | **0.2%**: when the model says 70%, that side wins about 70% of the time |
+| Biggest pre-game factors | the draft (hero strength, pairs that work together, counters) and the players' 30-day history |
+| Browser vs Python | the in-browser model matches the Python pipeline to 5 decimal places |
+
+Findings along the way:
+
+- **Game length is an outcome, not a clock.** A plain "win rate vs game length"
+  slope correlated −0.74 with a hero's overall win rate, because the stronger
+  side wins stomps and stomps end early. Adjusting for hero strength brings that
+  to 0.02.
+- **Interpolating stats between snapshots leaked the future.** The model scored
+  better just after a snapshot than at it; carrying stats forward with a
+  "how old is this" input fixed it.
+- **More models aren't always better.** Separate models per queue and per rank
+  bracket were tested against the one shared model and none beat it; the
+  narrower the group, the worse its own model did.
+
+## Screenshots
+
+| Win probability for a finished match | Live games and match tracking |
+|---|---|
+| ![Win probability](docs/screenshots/win-probability.png) | ![Live games](docs/screenshots/live.png) |
+| **Scaling index, adjusted for hero strength** | **Model check: every result on held-out data** |
+| ![Scaling index](docs/screenshots/scaling.png) | ![Model check](docs/screenshots/model-check.png) |
+
+## How it works
+
+```
+Deadlock API data lake ──DuckDB──▶ pipeline/ (Python) ──▶ small tables + exported models in data/
+   (700 GB of Parquet)            power curves, factors,       │
+                                  win model, evaluation        ├──▶ api/ (FastAPI, local)
+                                                               └──▶ GitHub Pages (static JSON)
+                                                                        │
+Deadlock API (live) ─────────────────────────────────────────────▶ web/ (React + TypeScript)
+   match data, live broadcasts                                      runs the model in the browser
+```
+
+- **Pipeline** (`pipeline/`): queries the lake one day at a time with DuckDB,
+  builds per-minute team-difference rows (souls, kills, objectives, draft,
+  player history), and precomputes every table the site shows.
+- **Model** (`pipeline/model.py`): one gradient-boosted model over all minutes,
+  with a per-minute logistic score as an input, both teams treated the same,
+  and isotonic recalibration. Tested by training on earlier days and scoring the
+  newest one, split by match.
+- **Site** (`web/`): React + TypeScript with hand-made SVG charts. There is no
+  server: the models are exported to JSON and run in the visitor's browser,
+  for match lookups and live tracking.
+- **Deploy**: every push runs the parity test, builds the site and publishes it
+  to GitHub Pages (`.github/workflows/pages.yml`).
+
+**Stack:** Python (pandas, DuckDB, scikit-learn, FastAPI) · TypeScript, React,
+Vite · GitHub Actions, GitHub Pages.
+
+The rest of this README is the detailed write-up: method, every model
+experiment, and how to run it yourself.
 
 ## Layout
 
