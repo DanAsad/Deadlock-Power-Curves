@@ -14,6 +14,7 @@ export interface Meta {
   bins: { idx: number; label: string; mid_min: number }[];
   min_games_per_bin: number;
   min_bins_for_index: number;
+  leaver_matches_excluded?: number; leaver_share?: number;   // matches where someone left, left out of the curves
   filters: { queue: Option[]; rank: Option[]; period: Option[] };
   sample_sizes: Record<string, Sample>;
 }

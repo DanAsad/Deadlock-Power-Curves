@@ -21,7 +21,7 @@ Not affiliated with Valve.
 
 | | |
 |---|---|
-| Matches analysed (power curves, 30 days) | **5.8 million** |
+| Matches analysed (power curves, 30 days) | **5.6 million** (matches where someone left are excluded) |
 | Win model trained on / tested on | 1.8M matches / 146k matches from a later day it never saw |
 | Winner picked correctly | **65%** at minute 3 · **72%** at minute 15 · **82%** at minute 30 |
 | Calibration error | **0.2%**: when the model says 70%, that side wins about 70% of the time |
@@ -31,9 +31,14 @@ Not affiliated with Valve.
 Findings along the way:
 
 - **Game length is an outcome, not a clock.** A plain "win rate vs game length"
-  slope correlated −0.74 with a hero's overall win rate, because the stronger
+  slope correlates −0.80 with a hero's overall win rate, because the stronger
   side wins stomps and stomps end early. Adjusting for hero strength brings that
-  to 0.02.
+  to 0.01.
+- **Short games are mostly someone leaving.** 86% of games under 20 minutes
+  have a player who abandoned, and that team wins 0.2% of them. Those matches
+  (10.5% of all) are left out of the power curves; the odd jump between the
+  under-20 and 20–25 minute buckets, which tracked hero strength (r = 0.88),
+  disappears (r = 0.08).
 - **Interpolating stats between snapshots leaked the future.** The model scored
   better just after a snapshot than at it; carrying stats forward with a
   "how old is this" input fixed it.
@@ -150,18 +155,35 @@ retraining), commit `data/`, push.
   Needs ≥ 3 shown buckets. Early/late labels are used only when the CI excludes 0.
 - **Adjusted for hero strength.** Game length is an outcome, not a clock:
   short games are stomps, and the stronger side wins stomps. A plain slope
-  therefore calls every strong hero "early-game"; across heroes it correlated
-  −0.74 with overall win rate. The index first estimates, per length bucket and
+  therefore calls every strong hero "early-game"; across heroes it correlates
+  −0.80 with overall win rate. The index first estimates, per length bucket and
   across all heroes, how much of a hero's overall edge shows up in that bucket
-  (about 1.6× in 20–30 minute games, 0.45× in 50+ minute games), removes that
-  part, and fits the slope on what is left. The adjusted index correlates 0.02
-  with win rate. The plain slope is kept as `raw_pp_per_10min` (table view),
+  (2.1× in games under 20 minutes, falling steadily to 0.45× in 50+ minute
+  games), removes that part, and fits the slope on what is left. The adjusted
+  index correlates 0.01 with win rate.
+- **Matches where someone left are excluded** (`LEAVERS` in `pipeline/build.py`,
+  10.5% of matches). In 3 days of matches checked by game length:
+
+  | Game length | Matches with a leaver | Win rate of the leaver's team |
+  |---|---|---|
+  | under 20 min | 86% | 0.2% |
+  | 20–25 min | 39% | 1.6% |
+  | 25–30 min | 14% | 5.9% |
+  | 30+ min | 6% | 25% |
+
+  With them in, the under-20 bucket said more about who quits than about
+  heroes: its jump to 20–25 minutes was twice the size of other neighbouring
+  buckets and tracked hero strength (r = 0.88, the wrong way round for
+  stomps). Without them the jump is the same size as the others (1.97 vs 1.98
+  points on average) and unrelated to strength (r = 0.08). The win model is
+  unchanged: it has an abandons factor and uses all matches. The plain slope is kept as `raw_pp_per_10min` (table view),
   and is still what the win model's draft-scaling factor uses.
 - **Strength at each minute** (`python -m pipeline.at_minute --days 30`,
   hero pages). Instead of win rate by game length, the game state with the
   hero at fixed minutes, from the lake's stat snapshots (3, 6, … 15, 20, … 45):
   the team's soul lead as % of all souls in the match, and the hero's own souls
-  vs the match average. Zero is the average hero; one row per hero per match,
+  vs the match average. Matches where someone left are excluded, as above.
+  Zero is the average hero; one row per hero per match,
   so the 95% CI is mean ± 1.96·sd/√n. Only matches still running at a minute
   count there, so late minutes lean toward closer games.
 - **Partners and match-ups** (`python -m pipeline.hero_pairs`, hero pages).
@@ -171,6 +193,11 @@ retraining), commit `data/`, push.
   2,000 pseudo-games, which is exactly what the win model's draft-synergy and
   draft-counter factors use (checked in `pipeline/tests/test_hero_extra.py`).
   Most effects are within ±2 points.
+- **Scaling by game minute** (Scaling index page, "By game minute"): each
+  hero's own souls vs the match average at minute 30 minus at minute 12. It
+  ignores game length, so stomps can't bias it; it ranks who farms into the late
+  game. The 95% CI combines the two minutes as if independent, which is
+  conservative (they share matches).
 
 ## What wins games
 

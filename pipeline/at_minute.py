@@ -10,7 +10,8 @@ the lake's stat snapshots (3, 6, 9, 12, 15, 20, 25 … 45 min):
   soul_share  the hero's own souls vs the lobby average at minute X, in %
               (+10 = 10% more souls than the average player).
 
-Only matches still running at minute X count at minute X, so late minutes skew
+Matches where someone left are not counted, as in the power curves. Only matches
+still running at minute X count at minute X, so late minutes skew
 toward close games; the page says so. One hero appears once per match, so
 observations are independent across matches and the 95% CI is mean ± 1.96·sd/√n.
 
@@ -31,13 +32,14 @@ from pipeline.stats import Z95
 from pipeline.win_factors import CACHE, FINAL_AFTER_DAYS, _query, _save
 from pipeline.win_factors_sql import SNAPSHOT_S
 
-VERSION = "am1"
+VERSION = "am2"          # am2: leaver flag
 MEMORY_LIMIT = "6GB"
 VALUES = ["n", "s_lead", "ss_lead", "s_share", "ss_share"]
 
 RAW = """
     SELECT match_id, hero_id, player_slot, team::VARCHAR AS team, won, start_time, average_badge,
-           match_mode::VARCHAR AS queue, duration_s, "stats.time_stamp_s" AS ts, "stats.net_worth" AS nw
+           match_mode::VARCHAR AS queue, duration_s, "stats.time_stamp_s" AS ts, "stats.net_worth" AS nw,
+           coalesce(abandon_match_time_s, 0) > 0 AS abandoned
     FROM dl.main.match_player
     WHERE start_time >= TIMESTAMPTZ '{day} 00:00:00+00' AND start_time < TIMESTAMPTZ '{next_day} 00:00:00+00'
       AND game_mode = 'Normal' AND match_mode IN ('Ranked', 'Unranked') AND match_outcome = 'TeamWin'
@@ -50,7 +52,7 @@ WITH dedup AS (
     SELECT * FROM am_raw QUALIFY row_number() OVER (PARTITION BY match_id, hero_id ORDER BY player_slot) = 1
 ),
 players AS (        -- complete matches only: 12 players, 6 per team, 6 winners
-    SELECT * FROM dedup
+    SELECT *, bool_or(abandoned) OVER (PARTITION BY match_id) AS leaver FROM dedup
     QUALIFY count(*) OVER (PARTITION BY match_id) = 12
         AND sum(won::INT) OVER (PARTITION BY match_id) = 6
         AND sum((team = 'Team0')::INT) OVER (PARTITION BY match_id) = 6
@@ -58,7 +60,7 @@ players AS (        -- complete matches only: 12 players, 6 per team, 6 winners
 ),
 snap AS (           -- exact snapshots only, never the game-end one
     SELECT * FROM (
-        SELECT match_id, hero_id, team, queue, average_badge, duration_s, start_time,
+        SELECT match_id, hero_id, team, queue, average_badge, duration_s, start_time, leaver,
                unnest(ts)::BIGINT AS t, unnest(nw)::DOUBLE AS nw
         FROM players)
     WHERE t IN ({snapshots}) AND t < duration_s
@@ -70,13 +72,13 @@ w AS (
     FROM snap
 ),
 x AS (
-    SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, hero_id::INT AS hero_id, queue, {rank} AS rank,
+    SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, hero_id::INT AS hero_id, queue, {rank} AS rank, leaver,
            (t // 60)::INT AS minute,
            100 * (2 * own - lobby) / lobby AS lead,
            100 * (nw / (lobby / 12) - 1) AS share
     FROM w WHERE np = 12 AND lobby > 0
 )
-SELECT day, hero_id, queue, rank, minute, count(*)::BIGINT AS n,
+SELECT day, hero_id, queue, rank, leaver, minute, count(*)::BIGINT AS n,
        sum(lead) AS s_lead, sum(lead * lead) AS ss_lead, sum(share) AS s_share, sum(share * share) AS ss_share
 FROM x GROUP BY ALL
 """
@@ -120,6 +122,8 @@ def fetch(days: int, refresh: bool = False) -> pd.DataFrame:
 
 def summarise(sums: pd.DataFrame) -> pd.DataFrame:
     """Means and 95% CIs per slice x hero x minute from the summed values."""
+    if "leaver" in sums:                       # same rule as the power curves: no matches where someone left
+        sums = sums[~sums["leaver"].astype(bool)]
     df = assign_period(sums)
     s = expand_slices(df, VALUES, ["hero_id", "minute"])
     n = s["n"].to_numpy(float)

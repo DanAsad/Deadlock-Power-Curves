@@ -3,6 +3,7 @@ import { useMeta } from "../filters";
 
 /** Required on every power-curve view (stats rules in CLAUDE.md). */
 export function LengthCaveat() {
+  const meta = useMeta();
   return (
     <p className="note">
       <span aria-hidden>ⓘ</span>
@@ -10,6 +11,10 @@ export function LengthCaveat() {
         <b>Game length is an outcome, not a clock.</b> A hero that wins short games may be strong
         early, or may just be on the winning side of stomps, which end sooner. Read these curves as
         “win rate in games that lasted X minutes”, not “strength at minute X”.
+        {meta?.leaver_share != null && meta.leaver_share > 0 && (
+          <> Matches where a player left ({(meta.leaver_share * 100).toFixed(0)}% of all, but most games under 20
+          minutes) are not counted: the team with the leaver almost always loses, whatever the heroes.</>
+        )}
       </span>
     </p>
   );
