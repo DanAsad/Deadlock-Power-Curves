@@ -266,3 +266,14 @@ tr.dim td { color: var(--muted); }
 .about-author { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .about-author .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .about-author .btn { text-decoration: none; }
+
+/* Hero page: strength at each minute, partners and match-ups */
+.pair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+.sub-h { font-size: 14px; font-weight: 600; margin: 4px 0 2px; }
+.pair-table td, .pair-table th { white-space: nowrap; }
+.pair-hero { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); text-decoration: none; }
+.pair-hero:hover { text-decoration: underline; }
+.pair-hero img { border-radius: 4px; }
+.effect-bar { position: relative; display: inline-block; width: 64px; height: 8px; margin-right: 8px; vertical-align: middle;
+  background: linear-gradient(var(--axis), var(--axis)) center / 1px 100% no-repeat; }
+.effect-bar i { position: absolute; top: 0; height: 100%; border-radius: 2px; }

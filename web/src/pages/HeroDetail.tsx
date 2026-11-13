@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { sliceQuery, useApi, type CurvesResponse, type HeroesResponse, type IndexResponse } from "../api";
 import { PowerCurve } from "../charts/PowerCurve";
+import { HeroAtMinute, HeroPairs } from "../components/HeroExtras";
 import { DemoBanner, LengthCaveat, Loading, ThresholdNote, ViewToggle } from "../components/ui";
 import { FilterBar, useMeta, useSlice, useSliceSearch } from "../filters";
 import { int, pct, pp } from "../format";
@@ -24,6 +25,7 @@ export function HeroDetail() {
   const loading = heroes.loading || curves.loading || index.loading;
   const error = heroes.error || curves.error || index.error;
   const name = hero?.name ?? `Hero ${id}`;
+  const byId = new Map((heroes.data?.heroes ?? []).map((h) => [h.id, h]));
 
   return (
     <>
@@ -32,7 +34,7 @@ export function HeroDetail() {
         {hero?.image && <img src={hero.image} alt="" />}
         <div>
           <h1>{name}</h1>
-          <p className="lede" style={{ margin: 0 }}>Win rate by game length</p>
+          <p className="lede" style={{ margin: 0 }}>Win rate by game length, strength at each minute, partners and match-ups</p>
         </div>
       </div>
       <DemoBanner />
@@ -102,6 +104,8 @@ export function HeroDetail() {
         </div>
       </Loading>
       <div style={{ marginTop: 16 }}><LengthCaveat /></div>
+      <HeroAtMinute id={id} name={name} slice={slice} />
+      <HeroPairs id={id} name={name} heroes={byId} search={search} />
     </>
   );
 }

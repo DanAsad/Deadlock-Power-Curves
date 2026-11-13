@@ -157,6 +157,20 @@ retraining), commit `data/`, push.
   part, and fits the slope on what is left. The adjusted index correlates 0.02
   with win rate. The plain slope is kept as `raw_pp_per_10min` (table view),
   and is still what the win model's draft-scaling factor uses.
+- **Strength at each minute** (`python -m pipeline.at_minute --days 30`,
+  hero pages). Instead of win rate by game length, the game state with the
+  hero at fixed minutes, from the lake's stat snapshots (3, 6, … 15, 20, … 45):
+  the team's soul lead as % of all souls in the match, and the hero's own souls
+  vs the match average. Zero is the average hero; one row per hero per match,
+  so the 95% CI is mean ± 1.96·sd/√n. Only matches still running at a minute
+  count there, so late minutes lean toward closer games.
+- **Partners and match-ups** (`python -m pipeline.hero_pairs`, hero pages).
+  For each pair of heroes, together or against each other, the win rate beyond
+  what the two heroes' own win rates predict, in percentage points, with a 95%
+  CI; pairs need 1,000+ games. Ordered by the effect shrunk toward zero by
+  2,000 pseudo-games, which is exactly what the win model's draft-synergy and
+  draft-counter factors use (checked in `pipeline/tests/test_hero_extra.py`).
+  Most effects are within ±2 points.
 
 ## What wins games
 
