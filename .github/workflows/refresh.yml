@@ -1,0 +1,108 @@
+# Weekly data refresh: rebuilds the tables the site shows from the last 30 days
+# of the data lake, commits them, and redeploys the site.
+#   power curves + scaling index   python -m pipeline.build --days 30
+#   strength at each minute        python -m pipeline.at_minute --days 30
+#   partners and match-ups         python -m pipeline.hero_pairs --days 30
+# The win model is NOT retrained here (that needs ~14 GB and an hour; run
+# python -m pipeline.evaluate locally). Day caches (data/cache/{counts,totals,am,pp}_*)
+# are kept between runs with actions/cache, so a run only downloads new days.
+# Also runs on demand: Actions -> "Weekly data refresh" -> Run workflow.
+name: Weekly data refresh
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"          # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write                 # commit the new tables
+  actions: write                  # start the Pages deploy
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install "duckdb==2.0.0" pandas pyarrow numpy
+
+      - name: Restore day caches
+        uses: actions/cache/restore@v4
+        with:
+          path: data/cache
+          key: day-cache-${{ github.run_id }}
+          restore-keys: day-cache-
+
+      - name: Patch dates
+        run: python -m pipeline.patches
+      - name: Power curves and scaling index
+        run: python -u -m pipeline.build --days 30
+      - name: Strength at each minute
+        run: python -u -m pipeline.at_minute --days 30
+      - name: Partners and match-ups
+        run: python -u -m pipeline.hero_pairs --days 30
+
+      - name: Drop day caches older than 40 days
+        if: always()
+        run: |
+          python - <<'EOF'
+          from datetime import date, timedelta
+          from pathlib import Path
+          old = str(date.today() - timedelta(days=40))
+          for f in Path("data/cache").glob("*_*.parquet"):
+              if f.stem.split("_", 1)[1] < old:
+                  f.unlink()
+          EOF
+          rm -rf data/cache/duckdb_tmp
+      - name: Save day caches
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache
+          key: day-cache-${{ github.run_id }}
+
+      - name: Check the new tables before publishing
+        run: |
+          python - <<'EOF'
+          import json
+          import pandas as pd
+          meta = json.load(open("data/meta.json"))
+          n = meta["sample_sizes"]["all|all|all"]["matches"]
+          heroes = json.load(open("data/heroes.json"))
+          curves = pd.read_parquet("data/power_curves.parquet")
+          am = pd.read_parquet("data/at_minute.parquet")
+          pairs = pd.read_parquet("data/hero_pairs.parquet")
+          problems = []
+          if n < 1_000_000: problems.append(f"only {n:,} matches")
+          if len(heroes) < 30: problems.append(f"only {len(heroes)} heroes")
+          if curves["hero_id"].nunique() < 30: problems.append("power curves cover too few heroes")
+          if am.query("queue=='all' and rank=='all' and period=='all'")["hero_id"].nunique() < 30: problems.append("minute curves cover too few heroes")
+          if pairs.query("queue=='all' and rank=='all' and period=='all'")["hero"].nunique() < 30: problems.append("pair table covers too few heroes")
+          print(f"{n:,} matches, {len(heroes)} heroes, {meta['first_match'][:10]} to {meta['last_match'][:10]}")
+          if problems:
+              raise SystemExit("not publishing: " + "; ".join(problems))
+          EOF
+
+      - name: Commit and redeploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.parquet data/*.json
+          if git diff --cached --quiet; then
+            echo "No changes"; exit 0
+          fi
+          git commit -m "Weekly data refresh ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          # a push made with this workflow's token does not start other workflows; a manual trigger does
+          gh workflow run pages.yml --ref main

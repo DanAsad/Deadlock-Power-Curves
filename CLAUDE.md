@@ -71,6 +71,8 @@ users browse and filter charts about Deadlock heroes.
   refits just the stream model.
 - Online: GitHub Pages at https://danasad.github.io/Deadlock-Power-Curves/, static
   mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml.
+- Weekly refresh: .github/workflows/refresh.yml (Mondays) rebuilds the Phase 1, minute
+  and pair tables, commits data/ as github-actions[bot] and starts pages.yml. Not the model.
 - Training rows: snapshot minutes for all matches, every minute for match_id % 5 == 2.
   Between snapshots stats are carried forward, never interpolated (that leaks).
 - Patch dates: `pipeline/patches.py` → data/patches.json (read by config.PATCHES).
@@ -87,4 +89,4 @@ users browse and filter charts about Deadlock heroes.
 Dan prefers direct, continuation-oriented work: make edits without asking
 before each one; explain decisions briefly.
 After each finished change, commit and push to GitHub (origin/main) without
-being asked. Never commit `data/cache/`.
+being asked. Run `git pull --rebase` before pushing: the weekly refresh commits to main. Never commit `data/cache/`.

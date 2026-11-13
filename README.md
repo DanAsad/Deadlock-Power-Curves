@@ -128,9 +128,16 @@ backend, so on every push to `main` the workflow in `.github/workflows/pages.yml
 builds the frontend in static mode (`VITE_STATIC=1`) and runs
 `python -m api.export_static`, which writes every API response as a JSON file
 from the committed tables in `data/`. Match lookups and live games are scored in
-the visitor's browser (see Win probability). To refresh the numbers online:
-rerun the pipeline locally (and `python -m pipeline.export_web` after
-retraining), commit `data/`, push.
+the visitor's browser (see Win probability).
+
+**Weekly refresh** (`.github/workflows/refresh.yml`, Mondays 06:17 UTC, or
+Actions → "Weekly data refresh" → Run workflow): rebuilds the power curves,
+scaling index, minute curves and pair tables from the last 30 days of the lake,
+checks them (at least 1M matches and 30 heroes, or nothing is published),
+commits `data/` and starts the Pages deploy. Day caches are kept between runs
+with `actions/cache`, so a run only downloads the new days. The win model is
+not retrained there: run `python -m pipeline.evaluate` and
+`python -m pipeline.export_web --fixtures` locally, then commit.
 
 ## Data
 
