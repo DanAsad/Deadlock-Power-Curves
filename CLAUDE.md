@@ -69,8 +69,11 @@ users browse and filter charts about Deadlock heroes.
   raw_pp_per_10min is the plain slope and is what the model's draft_scaling uses.
 - `python -m pipeline.evaluate --demo` never overwrites real results; `--stream-only`
   refits just the stream model.
+- "Findings" page (web/src/pages/Findings.tsx): the project as one article; charts read the same
+  files as the other tabs, one-off numbers in the text are dated.
 - Online: GitHub Pages at https://danasad.github.io/Deadlock-Power-Curves/, static
-  mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml.
+  mode (api/export_static.py + VITE_STATIC=1), redeployed by .github/workflows/pages.yml, which also
+  writes <route>.html copies so deep links return 200 (add new routes there). Tests: .github/workflows/tests.yml.
 - Weekly refresh: .github/workflows/refresh.yml (Mondays) rebuilds the Phase 1, minute
   and pair tables, commits data/ as github-actions[bot] and starts pages.yml. Not the model.
 - Training rows: snapshot minutes for all matches, every minute for match_id % 5 == 2.

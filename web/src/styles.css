@@ -220,9 +220,11 @@ tr.dim td { color: var(--muted); }
 .placeholder ol { color: var(--ink-2); padding-left: 20px; }
 
 @media (max-width: 640px) {
-  .header { padding: 0 16px; gap: 12px; }
-  .brand span { display: none; }
-  .theme-btn { padding: 4px 8px; }
+  /* phones: every tab visible (wrapped under the title) instead of a hidden side-scroll; not sticky, it is taller */
+  .header { position: static; height: auto; flex-wrap: wrap; padding: 10px 16px 8px; gap: 6px 12px; }
+  .nav { order: 3; flex-basis: 100%; flex-wrap: wrap; overflow: visible; gap: 2px; margin: 0 -8px; }
+  .nav a { padding: 4px 8px; font-size: 13px; }
+  .theme-btn { padding: 4px 8px; margin-left: auto; }
   main { padding: 16px 16px 48px; }
   .sample { margin-left: 0; text-align: left; width: 100%; }
 }
@@ -248,6 +250,17 @@ tr.dim td { color: var(--muted); }
 .live-table td { vertical-align: middle; }
 .live-table tr[aria-selected="true"] td { background: var(--surface-2); }
 .live-table .roster-heroes img, .live-table .hero-fallback { width: 24px; height: 24px; }
+/* phones: each game becomes a small card (both teams, the meter, then time / lead / queue / watchers) */
+@media (max-width: 640px) {
+  .live-table thead { display: none; }
+  .live-table, .live-table tbody { display: block; }
+  .live-table tr { display: grid; grid-template-columns: repeat(4, auto) 1fr; align-items: center; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .live-table td { display: block; padding: 0; border: 0; text-align: left !important; min-width: 0 !important; font-size: 13px; }
+  .live-table td:nth-child(-n+3) { grid-column: 1 / -1; }
+  .live-table td:nth-child(8) { justify-self: end; }
+  .live-table td[data-label]::before { content: attr(data-label); display: inline-block; width: 92px; color: var(--muted); font-size: 12px; }
+  .live-table td.watch::before { content: "👁 "; }
+}
 
 /* author credit: small byline in the header, full credits in the footer */
 .byline { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -277,3 +290,18 @@ tr.dim td { color: var(--muted); }
 .effect-bar { position: relative; display: inline-block; width: 64px; height: 8px; margin-right: 8px; vertical-align: middle;
   background: linear-gradient(var(--axis), var(--axis)) center / 1px 100% no-repeat; }
 .effect-bar i { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+
+/* Findings: a readable article with figures */
+.essay { max-width: 780px; margin: 0 auto; }
+.essay h1 { font-size: 30px; line-height: 1.2; margin: 4px 0 12px; }
+.essay .kicker { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; }
+.essay section { margin: 32px 0 0; }
+.essay h2 { font-size: 20px; margin: 0 0 8px; }
+.essay p, .essay li { line-height: 1.65; color: var(--ink-2); }
+.essay p b, .essay li b { color: var(--ink); }
+.essay ul { padding-left: 20px; }
+.essay li + li { margin-top: 8px; }
+.essay-figure { margin: 16px 0; }
+.essay-figure figcaption { margin-top: 8px; }
+.essay-end { margin-top: 32px; }
+@media (max-width: 640px) { .essay h1 { font-size: 24px; } }

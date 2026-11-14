@@ -87,8 +87,8 @@ export function LiveGames() {
               <tbody>
                 {games.slice(0, shown).map((g) => (
                   <tr key={g.match_id} aria-selected={g.match_id === selected}>
-                    <td style={{ textAlign: "left" }}>{icons(g.heroes[0])}</td>
-                    <td style={{ textAlign: "left", minWidth: 190 }}>
+                    <td style={{ textAlign: "left" }} data-label={TEAMS[0]}>{icons(g.heroes[0])}</td>
+                    <td style={{ textAlign: "left", minWidth: 190 }} data-label="Win chance">
                       {/* two-part meter: each team's share of 100%, numbers in text beside it */}
                       <span className="meter" role="img" aria-label={`${TEAMS[0]} ${pc(g.p)}, ${TEAMS[1]} ${pc(1 - g.p)}`}>
                         <i style={{ width: `calc(${g.p * 100}% - 1px)`, background: TEAM_COLOR[0] }} />
@@ -96,11 +96,11 @@ export function LiveGames() {
                       </span>
                       <span className="num small"> {pc(g.p)} – {pc(1 - g.p)}</span>
                     </td>
-                    <td style={{ textAlign: "left" }}>{icons(g.heroes[1])}</td>
+                    <td style={{ textAlign: "left" }} data-label={TEAMS[1]}>{icons(g.heroes[1])}</td>
                     <td>~{Math.floor(g.minute)} min</td>
                     <td>{Math.abs(g.souls).toLocaleString()} {g.souls >= 0 ? TEAMS[0] : TEAMS[1]}</td>
                     <td>{g.ranked ? "Ranked" : "Unranked"}</td>
-                    <td>{g.spectators}</td>
+                    <td className="watch" title="People watching">{g.spectators}</td>
                     <td><button className="btn" onClick={() => select(g.match_id)}>Track</button></td>
                   </tr>
                 ))}

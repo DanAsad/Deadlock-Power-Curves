@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import type { Hero } from "../api";
 import { LiveLine, type LiveEvent, type LivePoint } from "../charts/LiveLine";
 import { EVENT_LETTER, TEAM_COLOR } from "../charts/WinProb";
-import { loadPriors, loadStreamModel } from "../wp/client";
+import { listedMode, loadPriors, loadStreamModel } from "../wp/client";
 import { draftFeatures, isScorable, newObjectiveEvents, streamRow, type ApiMatch, type PastLead, type Priors } from "../wp/features";
 import { playerHistory } from "../wp/history";
 import { predict, type Row, type WebModel } from "../wp/model";
@@ -30,6 +30,10 @@ type Status = { kind: "loading" | "live" | "waiting" | "over" | "error"; text: s
 interface Saved { saved: number; steps: Step[]; events: LiveEvent[]; past: PastLead[]; known: [number, number][] | null }
 
 // --- readings kept in this browser (per match) ---------------------------------
+/** Why a match cannot be scored: the model only knows standard 6v6 games. */
+const notScorable = (mode: string) => mode === "street_brawl"
+  ? "This is a Street Brawl game (4v4). The win model was trained on standard 6v6 matches only, so it can't score it."
+  : `This is not a standard 6v6 match (${mode}), so the model can't score it.`;
 const key = (id: number) => `dpc-track-${id}`;
 function loadSaved(id: number): Saved | null {
   try {
@@ -79,10 +83,14 @@ export function LiveTracker({ matchId, teams, heroes, onClose }:
           pri = p;
           if (!stop) { setModel(m); setPriors(p); }
         }
+        if (!opened) {
+          const mode = await listedMode(matchId);
+          if (mode && mode !== "normal") throw new StreamError(notScorable(mode), "other");
+        }
         const r = await readMatch(matchId, !opened);
         if (stop) return;
         opened = true; misses = 0;
-        if (r.players.length !== 12) throw new StreamError("This is not a standard 6v6 match, so the model cannot score it.", "other");
+        if (r.players.length !== 12) throw new StreamError(notScorable(r.players.length === 8 ? "street_brawl" : "other"), "other");
         const s = mem.current;
         if (!askedHistory) {                        // once per visit: 12 match histories, in the background
           askedHistory = true;

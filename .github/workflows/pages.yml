@@ -43,7 +43,23 @@ jobs:
         run: |
           pip install pandas pyarrow fastapi
           python -m api.export_static web/dist/data
-          cp web/dist/index.html web/dist/404.html   # deep links (/scaling, /heroes/7) load the app
+          cp web/dist/index.html web/dist/404.html   # any other address still loads the app
+      - name: A real page for every route
+        # Pages serves /scaling from scaling.html. Without these copies a deep link loads the app
+        # through 404.html with HTTP status 404, and link previews (LinkedIn, Slack) and search engines skip it.
+        run: |
+          python - <<'EOF'
+          import json, shutil
+          from pathlib import Path
+          dist = Path("web/dist")
+          routes = ["power-curves", "scaling", "what-wins", "model-check", "win-probability", "live", "findings", "about"]
+          routes += [f"heroes/{h['id']}" for h in json.load(open("data/heroes.json"))]
+          for r in routes:
+              f = dist / f"{r}.html"
+              f.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy(dist / "index.html", f)
+          print(len(routes), "routes")
+          EOF
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
