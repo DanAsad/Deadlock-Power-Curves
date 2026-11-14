@@ -1,6 +1,11 @@
 # Deadlock Power Curves: who scales, and who's winning
 
-**[Open the live site →](https://danasad.github.io/Deadlock-Power-Curves/)**
+[![Tests](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/tests.yml/badge.svg)](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/tests.yml)
+[![Deploy](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/pages.yml/badge.svg)](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/pages.yml)
+[![Weekly data refresh](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/refresh.yml/badge.svg)](https://github.com/DanAsad/Deadlock-Power-Curves/actions/workflows/refresh.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**[Open the live site →](https://danasad.github.io/Deadlock-Power-Curves/)** · **[Read the findings →](https://danasad.github.io/Deadlock-Power-Curves/findings)**
 
 A data science portfolio project by **Dan Asad** · [LinkedIn](https://www.linkedin.com/in/danasad/) · [GitHub](https://github.com/DanAsad)
 
@@ -444,3 +449,7 @@ seconds. This works for any match being played, not only the listed ones.
 - `npx tsx scripts/stream-check.ts [match_id]` prints one reading and its row.
 - Team names: team 0 is the Hidden King (Amber) and team 1 the Archmother
   (Sapphire), confirmed against the game's text files and the broadcast.
+
+## License
+
+Code: [MIT](LICENSE). Match data comes from the [Deadlock API](https://deadlock-api.com); Deadlock and its hero names and images belong to Valve. Not affiliated with Valve.

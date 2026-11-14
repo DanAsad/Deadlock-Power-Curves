@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { useApi, type Meta } from "./api";
 import { MetaContext, useSliceSearch } from "./filters";
+import { Findings } from "./pages/Findings";
 import { About, AUTHOR, REPO } from "./pages/About";
 import { AllCurves } from "./pages/AllCurves";
 import { HeroDetail } from "./pages/HeroDetail";
@@ -24,6 +25,7 @@ const SECTIONS = [
   { to: "/model-check", label: "Model check" },
   { to: "/win-probability", label: "Win probability" },
   { to: "/live", label: "Live games" },
+  { to: "/findings", label: "Findings" },
   { to: "/about", label: "About" },
 ];
 
@@ -81,6 +83,7 @@ function Shell() {
           <Route path="/model-check" element={<ModelCheck />} />
           <Route path="/win-probability" element={<WinProbability />} />
           <Route path="/live" element={<LiveGames />} />
+          <Route path="/findings" element={<Findings />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<p>Page not found.</p>} />
         </Routes>

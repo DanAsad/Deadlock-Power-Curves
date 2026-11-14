@@ -69,6 +69,17 @@ export interface LiveGame {
   spectators: number; region: string; heroes: [number[], number[]]; lost: [number, number];
 }
 
+/** The game mode of a match from the live list, if it is listed (null = not listed or the list is unreachable).
+ *  Checked before opening a broadcast, so a Street Brawl game does not use up one of the 6 tracked matches an hour. */
+export async function listedMode(matchId: number): Promise<string | null> {
+  try {
+    const all = await deadlock<ActiveMatch[]>("matches/active", "live games");
+    const m = all.find((x) => x.match_id === matchId);
+    if (!m) return null;
+    return m.game_mode === 1 ? "normal" : m.game_mode === 4 ? "street_brawl" : (m.game_mode_parsed ?? `mode ${m.game_mode}`);
+  } catch { return null; }
+}
+
 /** Standard 6v6 games in progress, each with the live model's current win chance for team 0. */
 export async function liveGames(): Promise<LiveGame[]> {
   const [priors, live] = await Promise.all([loadPriors(), loadLiveModel()]);

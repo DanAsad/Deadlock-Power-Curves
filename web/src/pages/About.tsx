@@ -54,6 +54,7 @@ export function About() {
         <div className="card">
           <h2>What you can do here</h2>
           <ul className="about-list">
+            <li><Link to="/findings">Findings</Link>: the whole project as one short read, with the main charts. Start here.</li>
             <li><Link to="/">Heroes</Link> and <Link to="/power-curves">All power curves</Link>: each hero's win rate by game
               length, with 95% confidence intervals, filterable by patch, queue and rank.</li>
             <li><Link to="/scaling">Scaling index</Link>: which heroes win long games and which win short ones, adjusted so
