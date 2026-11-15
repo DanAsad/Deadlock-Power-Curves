@@ -25,10 +25,10 @@ export const loadFullModel = () => once<WebModel>("win_model");
 export const loadLiveModel = () => once<WebModel>("win_model_live");
 export const loadStreamModel = () => once<WebModel>("win_model_stream");
 
-async function deadlock<T>(path: string, what: string): Promise<T> {
+async function deadlock<T>(path: string, what: string, notFound = ""): Promise<T> {
   let r: Response;
   try { r = await fetch(`${API}/${path}`); } catch { throw new Error(`Could not reach the Deadlock API for ${what}`); }
-  if (r.status === 404) throw new Error(`${what} was not found by the Deadlock API`);
+  if (r.status === 404) throw new Error(`${what} was not found by the Deadlock API${notFound}`);
   if (r.status === 429) throw new Error("The Deadlock API is rate-limiting requests; try again in a minute");
   if (!r.ok) throw new Error(`The Deadlock API returned an error for ${what} (HTTP ${r.status})`);
   return r.json();
@@ -37,7 +37,8 @@ async function deadlock<T>(path: string, what: string): Promise<T> {
 /** A finished match, in the same shape the backend's /win-probability/{id} returns. */
 export async function scoreMatch(matchId: string) {
   const [raw, priors, full, live] = await Promise.all([
-    deadlock<{ match_info?: ApiMatch } & ApiMatch>(`matches/${matchId}/metadata`, `match ${matchId}`),
+    deadlock<{ match_info?: ApiMatch } & ApiMatch>(`matches/${matchId}/metadata`, `match ${matchId}`,
+      ". If it ended in the last few minutes, try again shortly: a finished match takes about 2 minutes to appear (measured 2026-11-15)."),
     loadPriors(), loadFullModel(), loadLiveModel(),
   ]);
   const m = raw.match_info ?? raw;
