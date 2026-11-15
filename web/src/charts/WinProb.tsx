@@ -65,6 +65,10 @@ export function WinProb({ points, events, durationS, winner, teams, showLive }: 
   const xt: number[] = [];
   for (let t = 0; t <= maxX; t += maxX > 30 ? 10 : 5) xt.push(t);
 
+  // a long match runs past the model's time grid: shade that stretch and say why there is no line
+  const lastMin = points.length ? points[points.length - 1].minute : null;
+  const beyond = lastMin != null && endMin - lastMin > 1 ? { x0: x(lastMin), x1: x(endMin) } : null;
+
   const a = active != null ? points[active] : null;
   const nearest = (px: number) => points.reduce((b, p, i) => (Math.abs(x(p.minute) - px) < Math.abs(x(points[b].minute) - px) ? i : b), 0);
   const here = a ? events.filter((e) => Math.ceil(e.t / 60) === a.minute || (a.minute === 1 && e.t < 60)) : [];
@@ -101,6 +105,20 @@ export function WinProb({ points, events, durationS, winner, teams, showLive }: 
             <text x={m.l + 6} y={m.t + 12} fill="var(--muted)">↑ {teams[0]} favoured</text>
             <text x={m.l + 6} y={m.t + plotH - 6} fill="var(--muted)">↓ {teams[1]} favoured</text>
           </g>
+
+          {beyond && (
+            <g>
+              <rect x={beyond.x0} width={beyond.x1 - beyond.x0} y={m.t} height={plotH} fill="var(--muted)" opacity={0.08} />
+              <line x1={beyond.x0} x2={beyond.x0} y1={m.t} y2={m.t + plotH} stroke="var(--axis)" strokeDasharray="2 3" />
+              {beyond.x1 - beyond.x0 > 170 && (
+                <text x={(beyond.x0 + beyond.x1) / 2} y={y(0.86)} textAnchor="middle" fontSize={11} fill="var(--muted)">
+                  <tspan x={(beyond.x0 + beyond.x1) / 2}>No line past minute {lastMin}:</tspan>
+                  <tspan x={(beyond.x0 + beyond.x1) / 2} dy="1.35em">the model was trained on</tspan>
+                  <tspan x={(beyond.x0 + beyond.x1) / 2} dy="1.35em">minutes 1–{lastMin} only</tspan>
+                </text>
+              )}
+            </g>
+          )}
 
           {/* game end */}
           <line x1={x(endMin)} x2={x(endMin)} y1={m.t - 6} y2={m.t + plotH} stroke="var(--axis)" strokeDasharray="3 3" />

@@ -187,7 +187,7 @@ export function WinProbability() {
               )}
               {m.truncated && (
                 <p className="muted small" style={{ margin: "6px 0 0" }}>
-                  This match ran past minute {data?.max_minute ?? 45}, where the model's timeline ends; the line stops there.
+                  This match ran past minute {data?.max_minute ?? 45}, where the model's timeline ends, so the line stops there. The model's training rows stop at minute 45, so it has never been tested later in a game (about 1 match in 6 runs longer).
                 </p>
               )}
             </div>
