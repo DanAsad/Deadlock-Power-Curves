@@ -12,7 +12,9 @@ const TICKS_PER_S = 64;
 const STEAM_ID_BASE = "76561197960265728";          // steam id 64 = this + account id
 const D = "m_PlayerDataGlobal__", G = "m_pGameRules__", F = "m_vecFOWEntities__";
 
-export type StreamProblem = "not_ready" | "not_in_game" | "rate_limit" | "network" | "other";
+// not_started: Valve has not started broadcasting the match (hero selection and loading, or a match that is
+// never broadcast); the API keeps answering "Broadcast has not started yet" in its status messages.
+export type StreamProblem = "not_ready" | "not_started" | "not_in_game" | "rate_limit" | "network" | "other";
 export class StreamError extends Error {
   constructor(message: string, public kind: StreamProblem) { super(message); }
 }
@@ -33,6 +35,7 @@ async function query<T>(sql: string, matchId: number, timeoutMs = 20000): Promis
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   const rows: T[] = [];
+  let lastStatus = "";                                  // the API's own progress messages ("relay not ready ...")
   try {
     let r: Response;
     try {
@@ -60,7 +63,10 @@ async function query<T>(sql: string, matchId: number, timeoutMs = 20000): Promis
             throw problem(msg, status);
           }
           if (ev === "end") { await reader.cancel().catch(() => {}); return rows; }
-          if (ev === "status") continue;
+          if (ev === "status") {
+            try { lastStatus = String(JSON.parse(data).message ?? data); } catch { lastStatus = data; }
+            continue;
+          }
           try { rows.push(JSON.parse(data) as T); } catch { /* not a row */ }
         }
       }
@@ -69,6 +75,8 @@ async function query<T>(sql: string, matchId: number, timeoutMs = 20000): Promis
   } catch (e) {
     if (e instanceof StreamError) throw e;
     // a timeout with no rows = the broadcast exists but is not sending yet
+    if (!rows.length && /has not started/i.test(lastStatus))
+      throw new StreamError("Valve hasn't started broadcasting this match yet.", "not_started");
     throw new StreamError(rows.length ? "The broadcast stopped sending." : "The broadcast for this match is starting up.",
       ctl.signal.aborted ? "not_ready" : "network");
   } finally { clearTimeout(timer); }

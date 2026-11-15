@@ -19,6 +19,7 @@ import { predict, type Row, type WebModel } from "../wp/model";
 import { readMatch, StreamError, type Reading } from "../wp/stream";
 
 const POLL_S = 30;
+const NOT_STARTED_TRIES = 12;                                  // each try waits up to 45 s for the API, then POLL_S: about 15 minutes
 const KEEP_H = 6;                                              // saved readings older than this are dropped
 const FULL_CHECKS = 30;                                        // after the end: look for the full data this many minutes
 const pc = (v: number) => `${Math.round(v * 100)}%`;
@@ -66,7 +67,8 @@ export function LiveTracker({ matchId, teams, heroes, onClose }:
     { past: [], known: null, steps: [], events: [] });
 
   useEffect(() => {
-    let stop = false, timer = 0, misses = 0, opened = false, askedHistory = false;
+    let stop = false, timer = 0, misses = 0, opened = false, askedHistory = false, lastKind = "";
+    const started = Date.now();
     const saved = loadSaved(matchId);
     mem.current = { past: saved?.past ?? [], known: saved?.known ?? null, steps: saved?.steps ?? [], events: saved?.events ?? [] };
     setSteps(mem.current.steps); setEvents(mem.current.events); setRestored(mem.current.steps.length);
@@ -89,7 +91,7 @@ export function LiveTracker({ matchId, teams, heroes, onClose }:
         }
         const r = await readMatch(matchId, !opened);
         if (stop) return;
-        opened = true; misses = 0;
+        opened = true; misses = 0; lastKind = "";
         if (r.players.length !== 12) throw new StreamError(notScorable(r.players.length === 8 ? "street_brawl" : "other"), "other");
         const s = mem.current;
         if (!askedHistory) {                        // once per visit: 12 match histories, in the background
@@ -117,15 +119,23 @@ export function LiveTracker({ matchId, teams, heroes, onClose }:
       } catch (e) {
         if (stop) return;
         const err = e instanceof StreamError ? e : new StreamError((e as Error).message, "other");
-        misses += 1;
+        misses += 1; lastKind = err.kind;
         const had = mem.current.steps.length > 0;
         if (err.kind === "not_in_game") { again = false; setStatus({ kind: had ? "over" : "error", text: had ? "The match has ended." : err.message }); }
-        else if (err.kind === "not_ready" || err.kind === "network") {
+        else if (err.kind === "not_started" && !had) {
+          // Valve starts a match's broadcast after hero selection and loading, a few minutes in; some matches
+          // (custom lobbies, for example) are never broadcast. Keep checking for NOT_STARTED_TRIES readings.
+          if (misses > NOT_STARTED_TRIES) {
+            again = false;
+            setStatus({ kind: "error", text: `${err.message} Checked for ${Math.round((Date.now() - started) / 60000)} minutes. Some matches are never broadcast (custom lobbies, for example); if it's a normal match, try again in a few minutes.` });
+          } else setStatus({ kind: "waiting", text: `${err.message} It starts after hero selection and loading. Checking again about every minute (${misses} of ${NOT_STARTED_TRIES})…` });
+        }
+        else if (err.kind === "not_ready" || err.kind === "network" || err.kind === "not_started") {
           if (misses > 8) { again = false; setStatus({ kind: "error", text: `${err.message} Gave up after ${misses} tries.` }); }
           else setStatus({ kind: had ? "live" : "waiting", text: had ? "Missed a reading; trying again…" : `${err.message} Trying again every ${POLL_S / 2} seconds…` });
         } else { again = false; setStatus({ kind: "error", text: err.message }); }
       }
-      if (again && !stop) timer = window.setTimeout(tick, (opened ? POLL_S : POLL_S / 2) * 1000);
+      if (again && !stop) timer = window.setTimeout(tick, (opened || lastKind === "not_started" ? POLL_S : POLL_S / 2) * 1000);
     };
     tick();
     return () => { stop = true; window.clearTimeout(timer); };
