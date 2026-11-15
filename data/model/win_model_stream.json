@@ -58,7 +58,7 @@
   "hero_experience": 1,
   "player_form": 0,
   "player_farm": 1,
-  "hero_mastery": 0,
+  "hero_mastery": 1,
   "draft_synergy": 1,
   "draft_counter": 1,
   "souls_rel": 1,
@@ -80,6 +80,7 @@
   "draft_strength",
   "hero_experience",
   "player_farm",
+  "hero_mastery",
   "draft_synergy",
   "draft_counter",
   "souls_rel",
@@ -99,8 +100,7 @@
   "momentum",
   "carry_concentration",
   "draft_scaling",
-  "player_form",
-  "hero_mastery"
+  "player_form"
  ],
  "context": [
   "minute",
@@ -161,7 +161,7 @@
  "ranked_table": true,
  "iterations": 500,
  "train_matches": 400000,
- "train_rows": 4788531,
- "trained_through": "2026-11-11",
- "saved_at": "2026-11-12T16:05:59+00:00"
+ "train_rows": 4805869,
+ "trained_through": "2026-11-14",
+ "saved_at": "2026-11-15T17:47:28+00:00"
 }

@@ -54,3 +54,24 @@ def hero_pairs(s: SliceDep):
         heroes[str(int(h))] = {k: g[g["kind"] == k].sort_values("shrunk", ascending=False)[PAIR_COLS].values.tolist()
                                for k in ("with", "against")}
     return {**meta, "slice": s, "cols": PAIR_COLS, "heroes": heroes}
+
+
+ITEM_COLS = ["item_id", "n", "win_rate", "expected", "effect", "ci_low", "ci_high", "lead", "median_bucket"]
+TIMING_COLS = ["bucket", "n", "win_rate", "expected", "effect", "ci_low", "ci_high"]
+
+
+@router.get("/items")
+def items(s: SliceDep):
+    """Shop items in the selected slice: win rate of the buyers, the win rate expected
+    from the same hero in the same game state (soul lead and minute at purchase), and
+    the effect beyond that in percentage points, with a 95% CI. `timing` splits each
+    item by purchase minute (bucket labels in `buckets`). Rows are arrays in `cols` order."""
+    df = _pick(_table("items", "python -m pipeline.items"), s)
+    meta_f = DATA_DIR / "items.json"
+    meta = json.loads(meta_f.read_text(encoding="utf-8")) if meta_f.exists() else {}
+    df = df.round({"win_rate": 4, "expected": 4, "effect": 2, "ci_low": 2, "ci_high": 2, "lead": 2})
+    overall = df[df["bucket"] == -1].sort_values("effect", ascending=False)
+    timing = {str(int(i)): g.sort_values("bucket")[TIMING_COLS].values.tolist()
+              for i, g in df[df["bucket"] >= 0].groupby("item_id")}
+    rows = overall[ITEM_COLS].astype(object).where(overall[ITEM_COLS].notna(), None).values.tolist()
+    return {**meta, "slice": s, "cols": ITEM_COLS, "timing_cols": TIMING_COLS, "rows": rows, "timing": timing}

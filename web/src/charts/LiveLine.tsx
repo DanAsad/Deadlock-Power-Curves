@@ -32,11 +32,20 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
   const a = active != null ? points[Math.min(active, points.length - 1)] : null;
   const nearest = (px: number) => points.reduce((b, p, i) => (Math.abs(x(p.minute) - px) < Math.abs(x(points[b].minute) - px) ? i : b), 0);
   const end = points[points.length - 1];
+  // kills between readings, per team: bars up for team 0, down for team 1 (as on the finished-match graph)
+  const kd = real.map((p, i) => {
+    const prev = i ? real[i - 1].kills : undefined;
+    return p.kills && prev ? { minute: p.minute, k: [Math.max(p.kills[0] - prev[0], 0), Math.max(p.kills[1] - prev[1], 0)] as [number, number] } : null;
+  }).filter((v): v is { minute: number; k: [number, number] } => v != null);
+  const STRIP = kd.length ? 56 : 0;
+  const kMax = Math.max(1, ...kd.flatMap((v) => v.k));
+  const kMid = H + STRIP / 2 + 6, kH = STRIP / 2 - 10;
+  const barW = Math.max(2, Math.min(8, real.length > 1 ? (x(last) - x(first)) / real.length * 0.5 : 8));
 
   return (
-    <div className="chart" ref={ref} style={{ height: H }}>
+    <div className="chart" ref={ref} style={{ height: H + STRIP }}>
       {width > 0 && (
-        <svg width={W} height={H} role="img" tabIndex={0} aria-label={`Live win chance of ${teams[0]} by game time`}
+        <svg width={W} height={H + STRIP} role="img" tabIndex={0} aria-label={`Live win chance of ${teams[0]} by game time`}
           onPointerMove={(e) => setActive(nearest(e.clientX - e.currentTarget.getBoundingClientRect().left))}
           onPointerLeave={() => setActive(null)}
           onFocus={() => setActive((v) => v ?? points.length - 1)} onBlur={() => setActive(null)}
@@ -90,7 +99,18 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
               </g>
             );
           })}
-          {a && <line x1={x(a.minute)} x2={x(a.minute)} y1={m.t} y2={H - m.b} stroke="var(--axis)" />}
+          {kd.length > 0 && (
+            <g aria-hidden>
+              <text x={m.l} y={H + 8} fontSize={11} fill="var(--muted)">Kills between readings</text>
+              <line x1={m.l} x2={W - m.r} y1={kMid} y2={kMid} stroke="var(--grid)" shapeRendering="crispEdges" />
+              {kd.map((v) => [0, 1].map((t) => v.k[t] > 0 && (
+                <rect key={`${v.minute}-${t}`} x={x(v.minute) - barW / 2} width={barW} rx={1.5}
+                      y={t === 0 ? kMid - (v.k[0] / kMax) * kH - 1 : kMid + 1} height={(v.k[t] / kMax) * kH}
+                      fill={TEAM_COLOR[t]} />
+              )))}
+            </g>
+          )}
+          {a && <line x1={x(a.minute)} x2={x(a.minute)} y1={m.t} y2={H - m.b + (STRIP ? STRIP + 4 : 0)} stroke="var(--axis)" />}
           {/* the newest point is always marked: with one poll there is no line yet */}
           <circle cx={x((a ?? end).minute)} cy={y((a ?? end).p)} r={5} fill="var(--ink)" stroke="var(--surface)" strokeWidth={2} />
         </svg>
@@ -101,7 +121,10 @@ export function LiveLine({ points, teams, events = [], exact = false, height = 2
           <div><span className="key" style={{ background: TEAM_COLOR[0] }} /><b className="num">{pc(a.p)}</b> <span className="tl">{teams[0]}</span></div>
           <div><span className="key" style={{ background: TEAM_COLOR[1] }} /><b className="num">{pc(1 - a.p)}</b> <span className="tl">{teams[1]}</span></div>
           {!a.start && <div className="tl" style={{ marginTop: 2 }}>soul lead <b className="num">{Math.abs(a.souls).toLocaleString()}</b> ({a.souls >= 0 ? teams[0] : teams[1]})</div>}
-          {a.kills && !a.start && <div className="tl">kills <b className="num">{a.kills[0]}–{a.kills[1]}</b></div>}
+          {a.kills && !a.start && <div className="tl">kills <b className="num">{a.kills[0]}–{a.kills[1]}</b>{(() => {
+            const v = kd.find((k) => k.minute === a.minute);
+            return v && (v.k[0] || v.k[1]) ? <> (+{v.k[0]} / +{v.k[1]} since the last reading)</> : null;
+          })()}</div>}
         </div>
       )}
     </div>

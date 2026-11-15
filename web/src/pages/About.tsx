@@ -58,7 +58,10 @@ export function About() {
             <li><Link to="/">Heroes</Link> and <Link to="/power-curves">All power curves</Link>: each hero's win rate by game
               length, with 95% confidence intervals, filterable by patch, queue and rank.</li>
             <li><Link to="/scaling">Scaling index</Link>: which heroes win long games and which win short ones, adjusted so
-              that strong heroes winning stomps doesn't count as "early-game".</li>
+              that strong heroes winning stomps doesn't count as "early-game", and compared across rank brackets.</li>
+            <li><Link to="/pairs">Pairs</Link>: any two heroes together or against each other, and every pair as a matrix.</li>
+            <li><Link to="/items">Items</Link>: which items win games once you compare buyers with the same hero in the same
+              game state, instead of raw item win rates.</li>
             <li><Link to="/what-wins">What wins games</Link>: how much each factor (souls, kills, objectives, the draft,
               the players' history) is worth at each minute.</li>
             <li><Link to="/win-probability">Win probability</Link>: a minute-by-minute graph of who was winning, for any

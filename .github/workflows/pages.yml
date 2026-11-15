@@ -52,7 +52,7 @@ jobs:
           import json, shutil
           from pathlib import Path
           dist = Path("web/dist")
-          routes = ["power-curves", "scaling", "what-wins", "model-check", "win-probability", "live", "findings", "about"]
+          routes = ["power-curves", "scaling", "pairs", "items", "what-wins", "model-check", "win-probability", "live", "findings", "about"]
           routes += [f"heroes/{h['id']}" for h in json.load(open("data/heroes.json"))]
           for r in routes:
               f = dist / f"{r}.html"

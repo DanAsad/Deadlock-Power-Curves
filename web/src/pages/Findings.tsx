@@ -3,6 +3,7 @@
 // numbers quoted in the text that come from one-off checks say so.
 import { Link } from "react-router-dom";
 import { useApi, type CurvesResponse, type HeroesResponse, type IndexResponse } from "../api";
+import { ItemScatter, SlotLegend, type ItemPoint } from "../charts/ItemScatter";
 import { LossLines } from "../charts/LossLines";
 import { PowerCurve, curveDomain } from "../charts/PowerCurve";
 import { ScalingBars } from "../charts/ScalingBars";
@@ -14,10 +15,10 @@ import { AUTHOR } from "./About";
 
 const ALL = "queue=all&rank=all&period=all";
 const TEAMS: [string, string] = ["Hidden King", "Archmother"];
-const COMEBACK = 135722767;                       // the "Comeback" example match on the Win probability page
 
 interface Scores { accuracy: number }
 interface EvalLite { splits: Record<string, { test_day: string | null; matches_test: number; minutes: { minute: number; models: Record<string, Scores> }[] }> }
+interface ItemsLite { cols: string[]; rows: (number | null)[][]; items: { id: number; name: string; slot: string | null }[] }
 interface MatchResponse { match: { match_id: number; duration_s: number; winner: number; points: WpPoint[]; events: WpEvent[] } }
 
 const millions = (n: number) => `${(n / 1e6).toFixed(1)} million`;
@@ -37,7 +38,11 @@ export function Findings() {
   const heroes = useApi<HeroesResponse>(`heroes?${ALL}`);
   const index = useApi<IndexResponse>(`scaling-index?${ALL}`);
   const ev = useApi<EvalLite>("model-eval");
-  const match = useApi<MatchResponse>(`win-probability/${COMEBACK}`);
+  // the "Comeback" example on the Win probability page (re-picked from each new held-out day)
+  const list = useApi<{ matches: { match_id: number; label: string }[] }>("win-probability");
+  const COMEBACK = (list.data?.matches.find((x) => x.label === "Comeback") ?? list.data?.matches[0])?.match_id;
+  const match = useApi<MatchResponse>(COMEBACK != null ? `win-probability/${COMEBACK}` : null);
+  const items = useApi<ItemsLite>(`items?${ALL}`);
   const byId = new Map((heroes.data?.heroes ?? []).map((h) => [h.id, h]));
   const name = (id: number | undefined) => (id != null ? byId.get(id)?.name : undefined) ?? "–";
 
@@ -55,6 +60,20 @@ export function Findings() {
   const at = (m: number) => t?.minutes.find((x) => x.minute === m)?.models.unified?.accuracy;
   const soulsAt = (m: number) => t?.minutes.find((x) => x.minute === m)?.models.souls_only?.accuracy;
 
+  // items: raw edge of the buyers vs the edge left after comparing with the same hero in the same game state
+  const itemPts: ItemPoint[] = (() => {
+    const d = items.data;
+    if (!d) return [];
+    const ix = (c: string) => d.cols.indexOf(c);
+    const info = new Map(d.items.map((x) => [x.id, x]));
+    return d.rows.map((r) => {
+      const id = r[ix("item_id")] as number, it = info.get(id);
+      return { id, name: it?.name ?? String(id), slot: it?.slot ?? "", raw: ((r[ix("win_rate")] as number) - 0.5) * 100,
+               effect: r[ix("effect")] as number, n: r[ix("n")] as number };
+    });
+  })();
+  const avg = (f: (p: ItemPoint) => number) => itemPts.length ? itemPts.reduce((a, p) => a + Math.abs(f(p)), 0) / itemPts.length : 0;
+  const bestItems = [...itemPts].sort((a, b) => b.effect - a.effect).slice(0, 3);
   const m = match.data?.match;
   const low = m ? Math.min(...m.points.map((p) => (m.winner === 0 ? p.p : 1 - p.p))) : null;
   const matches = meta?.sample_sizes["all|all|all"]?.matches;
@@ -132,7 +151,17 @@ export function Findings() {
       </section>
 
       <section>
-        <h2>4. What wins games changes with the clock</h2>
+        <h2>4. Does rank change who scales?</h2>
+        <p>
+          Mostly no. Splitting ranked games into three brackets, the scaling index at low and high ranks correlates about
+          0.83 across heroes: the same heroes scale everywhere. A few move a lot. In the 30 days checked (13 Nov 2026),
+          Dynamo went from slightly early-game at low ranks to clearly late-game at high ranks, and Lady Geist became
+          more early-game. <Link to="/scaling?by=rank">Compare every hero by rank →</Link>
+        </p>
+      </section>
+
+      <section>
+        <h2>5. What wins games changes with the clock</h2>
         <p>
           A soul lead matters more the longer a game goes. At minute 3, the team ahead on souls wins only a little more
           than half the time; by minute 30 a souls-only model picks the winner {soulsAt(30) != null ? pct(soulsAt(30)!, 0) : "about 78%"} of the
@@ -172,7 +201,28 @@ export function Findings() {
       </section>
 
       <section>
-        <h2>5. A win-probability graph for any match</h2>
+        <h2>6. Items: most of an item's win rate is being ahead</h2>
+        <p>
+          Item win rates are the next obvious chart, and they have the same problem as short games: the team that is
+          ahead has more souls, so it buys more items, so almost every item "wins". Comparing each purchase with the
+          same hero in the same game state (the team's soul lead and the minute it was bought) shrinks the average
+          item edge from {avg((p) => p.raw).toFixed(1)} to {avg((p) => p.effect).toFixed(1)} percentage points.
+          {bestItems.length > 0 && <> What is left still separates items: the biggest effects are {bestItems.map((b, i) => (
+            <span key={b.id}>{i ? (i === bestItems.length - 1 ? " and " : ", ") : ""}<b>{b.name}</b> ({b.effect > 0 ? "+" : ""}{b.effect.toFixed(1)})</span>))}.
+            Part of what is left is still who buys: the adjustment uses the team's soul lead, not the buyer's own souls,
+            so expensive items keep a small edge from being bought by well-farmed players.</>}
+        </p>
+        <Figure
+          title="Raw vs adjusted, every item"
+          caption={<>Each point is an item: across, the buyers' win rate minus 50%; up, the edge left after the adjustment. On the dashed line nothing would change. <Link to="/items">Every item, by slot, tier and purchase time →</Link></>}>
+          <Loading loading={items.loading}>
+            {itemPts.length > 0 && <><SlotLegend /><ItemScatter points={itemPts} height={340} /></>}
+          </Loading>
+        </Figure>
+      </section>
+
+      <section>
+        <h2>7. A win-probability graph for any match</h2>
         <p>
           The model gives a win chance at every minute, which turns any match into a story. It picks the winner{" "}
           {at(3) != null ? pct(at(3)!, 0) : "65%"} of the time at minute 3, {at(15) != null ? pct(at(15)!, 0) : "72%"} at minute 15 and{" "}
@@ -194,7 +244,7 @@ export function Findings() {
       </section>
 
       <section>
-        <h2>6. What didn't work (and why that matters)</h2>
+        <h2>8. What didn't work (and why that matters)</h2>
         <ul>
           <li>
             <b>Filling in stats between snapshots leaked the future.</b> Stats are recorded every few minutes. Drawing a
@@ -215,7 +265,7 @@ export function Findings() {
       </section>
 
       <section>
-        <h2>7. Limits</h2>
+        <h2>9. Limits</h2>
         <ul>
           <li>These are the public matches the Deadlock API recorded, not every game played.</li>
           <li>Win rate by game length describes games that <i>lasted</i> that long. It is not a hero's strength at that minute; the hero pages also show the soul lead at fixed minutes for that.</li>

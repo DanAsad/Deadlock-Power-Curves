@@ -27,9 +27,9 @@ Not affiliated with Valve.
 | | |
 |---|---|
 | Matches analysed (power curves, 30 days) | **5.6 million** (matches where someone left are excluded) |
-| Win model trained on / tested on | 1.8M matches / 146k matches from a later day it never saw |
-| Winner picked correctly | **65%** at minute 3 · **72%** at minute 15 · **82%** at minute 30 |
-| Calibration error | **0.2%**: when the model says 70%, that side wins about 70% of the time |
+| Win model trained on / tested on | 1.7M matches / 169k matches from a later day it never saw |
+| Winner picked correctly | **65%** at minute 3 · **73%** at minute 15 · **82%** at minute 30 |
+| Calibration error | **0.15%**: when the model says 70%, that side wins about 70% of the time |
 | Biggest pre-game factors | the draft (hero strength, pairs that work together, counters) and the players' 30-day history |
 | Browser vs Python | the in-browser model matches the Python pipeline to 5 decimal places |
 
@@ -217,6 +217,51 @@ not retrained there: run `python -m pipeline.evaluate` and
   game. The 95% CI combines the two minutes as if independent, which is
   conservative (they share matches).
 
+## Items
+
+Raw item win rates mostly measure who could afford the item: the team that is
+ahead has more souls and buys more. `pipeline/items.py` compares each purchase
+with **the same hero in the same game state**:
+
+- **State** = the minute bucket of the purchase (0–5, 5–10, … 40+) and the
+  buyer's team soul lead at the last stat snapshot before it (% of all souls,
+  2-point bins).
+- **Expected** = the win rate of every player-snapshot in that state, plus the
+  hero's own edge beyond the game state.
+- **Effect** = buyers' win rate − expected, in percentage points, with a
+  binomial 95% CI. Each player's first purchase counts once; matches with a
+  leaver are excluded; items need 2,000 purchases in a slice.
+
+`pipeline/tests/test_items.py` plants an item that only the leading team buys
+(raw edge over 15 points, real effect 0) and one with a real +5 point effect,
+and checks that the adjustment removes the first and keeps the second.
+
+**Result (16 Oct – 14 Nov 2026, 1.18 billion first purchases, 156 items):** the
+adjustment cuts the average item edge from 2.5 to 1.1 percentage points (the
+two measures still correlate 0.85, so the order mostly survives). Highest after
+adjustment: Mystic Reverb (+3.8), Cheat Death (+3.4), Magic Carpet (+3.3), Spirit
+Burn (+3.3); lowest: Metal Skin (−4.0), Disarming Hex (−3.1), Rusted Barrel (−2.7).
+
+**Limit:** the game state is the *team's* soul lead, not the buyer's own souls.
+Tier-4 items still average +1.8 points, partly because only a well-farmed player
+can buy one; defensive items such as Metal Skin are bought by players under
+pressure. Both ends therefore still carry some "why it was bought". The next step
+is to add the buyer's own share of the souls to the state.
+
+The Items page shows the raw-vs-adjusted scatter, the ranking, and each item
+split by purchase minute.
+
+## Pairs and rank comparison
+
+- **Pairs** (`/pairs`): any two heroes with and against each other, and all
+  ~900 pairs as a matrix, from the same table as the hero pages' partners and
+  match-ups (`pipeline/hero_pairs.py`).
+- **Compare ranks** (`/scaling?by=rank`): each hero's scaling index (or souls
+  growth) in the three ranked brackets. Low and high ranks mostly agree on who
+  scales (correlation 0.83 across heroes); the biggest movers are Dynamo (more
+  late-game at high rank: −0.6 → +2.6 pp per 10 min) and Lady Geist (more
+  early-game: −1.3 → −3.8).
+
 ## What wins games
 
 `pipeline/win_factors.py` builds one row per match per game minute, with each
@@ -266,6 +311,12 @@ This is the first step toward Phase 2: the same rows are the training data.
 
 `python -m pipeline.evaluate --days 10` measures the team prediction on matches
 it never saw, written to `data/model_eval.json` and shown on the Model check page.
+
+Latest run (15 Nov 2026): trained on 9 days to 13 Nov (1.7M matches), tested on
+168,562 matches from 14 Nov. Winner picked 65.5% at minute 3, 72.6% at 15,
+82.1% at 30 and 73.7% across the game; calibration error 0.15%. The random-split
+check agrees (73.6%, 0.16%). A ranked-only model was retested and again gave no
+gain (log loss 0.5236 vs 0.5235 for the shared model).
 
 - **Splits, both by match:** newest day held out (train on the earlier days,
   like a live system) and a random 20% of matches.
@@ -345,15 +396,15 @@ loss, lower is better.
   --segments-only`). Each was trained on its own matches only and tested
   against the shared model on the same held-out matches. None is better, and
   the narrower the group, the worse its own model does, because it has less
-  data to learn from:
+  data to learn from (rerun 15 Nov 2026, tested on 14 Nov):
 
   | Trained and tested on | Training matches | Own log loss | Shared log loss | Gain (95% CI) |
   |---|---|---|---|---|
-  | Ranked | 248k | 0.5264 | 0.5262 | −0.0002 (−0.0007 to +0.0002) |
-  | Unranked | 400k (capped) | 0.5073 | 0.5074 | +0.0001 (−0.0001 to +0.0003) |
-  | Ranked, Initiate–Arcanist | 116k | 0.5145 | 0.5136 | −0.0010 (−0.0022 to +0.0003) |
-  | Ranked, Ritualist–Archon | 89k | 0.5370 | 0.5351 | −0.0030 (−0.0044 to −0.0016) |
-  | Ranked, Oracle–Eternus | 43k | 0.5433 | 0.5378 | −0.0073 (−0.0101 to −0.0045) |
+  | Ranked | 260k | 0.5237 | 0.5236 | −0.0001 (−0.0004 to +0.0003) |
+  | Unranked | 400k (capped) | 0.5060 | 0.5060 | −0.0001 (−0.0002 to +0.0000) |
+  | Ranked, Initiate–Arcanist | 116k | 0.5184 | 0.5170 | −0.0010 (−0.0021 to +0.0001) |
+  | Ranked, Ritualist–Archon | 102k | 0.5290 | 0.5264 | −0.0034 (−0.0045 to −0.0022) |
+  | Ranked, Oracle–Eternus | 42k | 0.5403 | 0.5352 | −0.0072 (−0.0101 to −0.0044) |
 
   The shared model already takes the queue as an input and has separate
   linear weights per queue, so it stays the only full model.

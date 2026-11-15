@@ -3,8 +3,9 @@
 #   power curves + scaling index   python -m pipeline.build --days 30
 #   strength at each minute        python -m pipeline.at_minute --days 30
 #   partners and match-ups         python -m pipeline.hero_pairs --days 30
+#   items                          python -m pipeline.items --days 30
 # The win model is NOT retrained here (that needs ~14 GB and an hour; run
-# python -m pipeline.evaluate locally). Day caches (data/cache/{counts,totals,am,pp}_*)
+# python -m pipeline.evaluate locally). Day caches (data/cache/{counts,totals,am,pp,it}_*)
 # are kept between runs with actions/cache, so a run only downloads new days.
 # Also runs on demand: Actions -> "Weekly data refresh" -> Run workflow.
 name: Weekly data refresh
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 340             # the first run downloads every day; later runs only the new ones
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,6 +50,8 @@ jobs:
         run: python -u -m pipeline.at_minute --days 30
       - name: Partners and match-ups
         run: python -u -m pipeline.hero_pairs --days 30
+      - name: Items
+        run: python -u -m pipeline.items --days 30
 
       - name: Drop day caches older than 40 days
         if: always()
@@ -80,12 +83,14 @@ jobs:
           curves = pd.read_parquet("data/power_curves.parquet")
           am = pd.read_parquet("data/at_minute.parquet")
           pairs = pd.read_parquet("data/hero_pairs.parquet")
+          items = pd.read_parquet("data/items.parquet")
           problems = []
           if n < 1_000_000: problems.append(f"only {n:,} matches")
           if len(heroes) < 30: problems.append(f"only {len(heroes)} heroes")
           if curves["hero_id"].nunique() < 30: problems.append("power curves cover too few heroes")
           if am.query("queue=='all' and rank=='all' and period=='all'")["hero_id"].nunique() < 30: problems.append("minute curves cover too few heroes")
           if pairs.query("queue=='all' and rank=='all' and period=='all'")["hero"].nunique() < 30: problems.append("pair table covers too few heroes")
+          if items.query("queue=='all' and rank=='all' and period=='all' and bucket==-1")["item_id"].nunique() < 60: problems.append("item table covers too few items")
           print(f"{n:,} matches, {len(heroes)} heroes, {meta['first_match'][:10]} to {meta['last_match'][:10]}")
           if problems:
               raise SystemExit("not publishing: " + "; ".join(problems))

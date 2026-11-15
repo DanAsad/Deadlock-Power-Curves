@@ -51,7 +51,7 @@
   "walkers": 0,
   "base_guardians": 1,
   "shrines": 1,
-  "mid_boss": 0,
+  "mid_boss": 1,
   "open_lanes": 0,
   "deepest_push": 0,
   "objective_damage": 0,
@@ -68,7 +68,7 @@
   "hero_experience": 1,
   "player_form": 0,
   "player_farm": 1,
-  "hero_mastery": 0,
+  "hero_mastery": 1,
   "draft_synergy": 1,
   "draft_counter": 1,
   "souls_rel": 0,
@@ -86,11 +86,13 @@
   "hero_damage",
   "base_guardians",
   "shrines",
+  "mid_boss",
   "enemy_abandons",
   "rank_gap",
   "draft_strength",
   "hero_experience",
   "player_farm",
+  "hero_mastery",
   "draft_synergy",
   "draft_counter",
   "linear"
@@ -102,7 +104,6 @@
   "denies",
   "guardians",
   "walkers",
-  "mid_boss",
   "open_lanes",
   "deepest_push",
   "objective_damage",
@@ -114,7 +115,6 @@
   "carry_concentration",
   "draft_scaling",
   "player_form",
-  "hero_mastery",
   "souls_rel"
  ],
  "context": [
@@ -176,7 +176,7 @@
  "ranked_table": true,
  "iterations": 500,
  "train_matches": 400000,
- "train_rows": 4791803,
- "trained_through": "2026-11-11",
- "saved_at": "2026-11-12T11:25:06+00:00"
+ "train_rows": 4805869,
+ "trained_through": "2026-11-14",
+ "saved_at": "2026-11-15T17:43:02+00:00"
 }

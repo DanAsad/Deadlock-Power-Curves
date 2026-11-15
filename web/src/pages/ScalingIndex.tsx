@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { sliceQuery, useApi, type HeroesResponse, type IndexResponse, type IndexRow } from "../api";
 import { ScalingBars } from "../charts/ScalingBars";
+import { RankCompare } from "../components/RankCompare";
 import { DemoBanner, LengthCaveat, Loading, ViewToggle } from "../components/ui";
 import { FilterBar, useMeta, useSlice, useSliceSearch } from "../filters";
 import { int, pct, pp } from "../format";
@@ -36,8 +37,9 @@ export function ScalingIndex() {
   const search = useSliceSearch();
   const meta = useMeta();
   const [params, setParams] = useSearchParams();
-  const mode = params.get("by") === "minute" ? "minute" : "length";
-  const setMode = (m: "length" | "minute") => { const p = new URLSearchParams(params); if (m === "minute") p.set("by", "minute"); else p.delete("by"); setParams(p); };
+  const by = params.get("by");
+  const mode = by === "minute" ? "minute" : by === "rank" ? "rank" : "length";
+  const setMode = (m: "length" | "minute" | "rank") => { const p = new URLSearchParams(params); if (m === "length") p.delete("by"); else p.set("by", m); setParams(p); };
   const [view, setView] = useState<"chart" | "table">("chart");
   const index = useApi<IndexResponse>(mode === "length" ? `scaling-index?${sliceQuery(slice)}` : null);
   const minute = useApi<AtMinuteResponse>(mode === "minute" ? `at-minute?${sliceQuery(slice)}` : null);
@@ -57,7 +59,9 @@ export function ScalingIndex() {
       <div className="seg" role="group" aria-label="Measure" style={{ marginBottom: 14 }}>
         <button aria-pressed={mode === "length"} onClick={() => setMode("length")}>By game length (win rate)</button>
         <button aria-pressed={mode === "minute"} onClick={() => setMode("minute")}>By game minute (souls)</button>
+        <button aria-pressed={mode === "rank"} onClick={() => setMode("rank")}>Compare ranks</button>
       </div>
+      {mode === "rank" ? <RankCompare from={FROM} to={TO} /> : <>
       <DemoBanner />
       {mode === "length" ? (
         <>
@@ -159,6 +163,7 @@ export function ScalingIndex() {
           than it needs to be. Each hero page shows the full curve for every minute from 3 to 45.
         </p>
       )}
+      </>}
     </>
   );
 }

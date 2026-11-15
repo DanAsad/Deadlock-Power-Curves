@@ -4,6 +4,8 @@ import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 import { useApi, type Meta } from "./api";
 import { MetaContext, useSliceSearch } from "./filters";
 import { Findings } from "./pages/Findings";
+import { Pairs } from "./pages/Pairs";
+import { Items } from "./pages/Items";
 import { About, AUTHOR, REPO } from "./pages/About";
 import { AllCurves } from "./pages/AllCurves";
 import { HeroDetail } from "./pages/HeroDetail";
@@ -19,12 +21,14 @@ import "./styles.css";
 
 const SECTIONS = [
   { to: "/", label: "Heroes", end: true },
-  { to: "/power-curves", label: "All power curves" },
-  { to: "/scaling", label: "Scaling index" },
-  { to: "/what-wins", label: "What wins games" },
+  { to: "/power-curves", label: "Power curves" },
+  { to: "/scaling", label: "Scaling" },
+  { to: "/pairs", label: "Pairs" },
+  { to: "/items", label: "Items" },
+  { to: "/what-wins", label: "What wins" },
   { to: "/model-check", label: "Model check" },
   { to: "/win-probability", label: "Win probability" },
-  { to: "/live", label: "Live games" },
+  { to: "/live", label: "Live" },
   { to: "/findings", label: "Findings" },
   { to: "/about", label: "About" },
 ];
@@ -83,6 +87,8 @@ function Shell() {
           <Route path="/model-check" element={<ModelCheck />} />
           <Route path="/win-probability" element={<WinProbability />} />
           <Route path="/live" element={<LiveGames />} />
+          <Route path="/pairs" element={<Pairs />} />
+          <Route path="/items" element={<Items />} />
           <Route path="/findings" element={<Findings />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<p>Page not found.</p>} />

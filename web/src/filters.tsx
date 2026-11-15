@@ -33,7 +33,7 @@ export function useSliceSearch(): string {
   return s ? `?${s}` : "";
 }
 
-export function FilterBar({ sample, range }: { sample?: Sample | null; range?: string }) {
+export function FilterBar({ sample, range, count }: { sample?: Sample | null; range?: string; count?: string }) {
   const meta = useMeta();
   const [slice, update] = useSlice();
   if (!meta) return null;
@@ -45,7 +45,7 @@ export function FilterBar({ sample, range }: { sample?: Sample | null; range?: s
       <Select label="Queue" value={slice.queue} options={f.queue} onChange={(v) => update({ queue: v })} />
       <Select label="Rank (ranked only)" value={slice.rank} options={f.rank} onChange={(v) => update({ rank: v })} />
       <div className="sample">
-        {sample ? <><b className="num">{int(sample.matches)}</b> matches</> : "No matches in this slice"}
+        {count ? <b className="num">{count}</b> : sample ? <><b className="num">{int(sample.matches)}</b> matches</> : "No matches in this slice"}
         <br />
         {range ?? `${date(meta.first_match)} – ${date(meta.last_match)}`}
       </div>

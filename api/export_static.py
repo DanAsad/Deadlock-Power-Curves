@@ -63,7 +63,8 @@ def export(out: Path) -> int:
             print(f"skipped web-model/{name}: run python -m pipeline.export_web")
     per_slice = {"heroes": power_curves.heroes, "power-curves": lambda s: power_curves.power_curves(s, None),
                  "scaling-index": power_curves.scaling_index, "win-factors": win_factors.win_factors,
-                 "at-minute": lambda s: hero_extra.at_minute(s, None), "hero-pairs": hero_extra.hero_pairs}
+                 "at-minute": lambda s: hero_extra.at_minute(s, None), "hero-pairs": hero_extra.hero_pairs,
+                 "items": hero_extra.items}
     for s in slices():
         key = f"{s.queue}_{s.rank}_{s.period}"
         for name, fn in per_slice.items():

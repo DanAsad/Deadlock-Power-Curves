@@ -17,7 +17,11 @@ const shortLabels: Record<string, string> = {
   draft_scaling: "Draft scaling", draft_strength: "Draft strength", hero_experience: "Hero exp.",
 };
 
-const unavailable = (f: FactorStat, fallback: string) => (f.available === false ? "ranked matches only" : fallback);
+// Why a factor has no bar at this minute: rank badges exist only in ranked matches; objectives such as
+// the Mid-Boss are not taken in enough games yet this early (say from which minute they are).
+const unavailable = (f: FactorStat, fallback: string, from?: number) =>
+  f.available === false ? "ranked matches only: set Queue to Ranked"
+    : from != null ? `${fallback} (from minute ${from})` : fallback;
 const stepLine = (f: FactorStat, d?: FactorDef) =>
   f.step_pp != null && d ? `${d.step} more: ${pct(0.5 + f.step_pp / 100)} (95% CI ${pct(0.5 + f.step_ci_low! / 100)} – ${pct(0.5 + f.step_ci_high! / 100)})` : "";
 
@@ -38,6 +42,7 @@ export function WinFactors() {
   const cur = minutes.find((m) => m.minute === minute) ?? minutes.find((m) => m.minute >= minute) ?? minutes[minutes.length - 1];
   const defs = useMemo(() => new Map((data?.factors ?? []).map((f) => [f.id, f])), [data]);
   const label = (id: string) => defs.get(id)?.label ?? id;
+  const firstMinute = (id: string) => minutes.find((m) => m.factors.some((x) => x.id === id && x.effect_pp != null))?.minute;
 
   const byWeight = useMemo(() => {
     if (!cur) return [];
@@ -48,7 +53,7 @@ export function WinFactors() {
     const d = defs.get(f.id);
     return {
       id: f.id, label: label(f.id), value: f.effect_pp, lo: f.ci_low, hi: f.ci_high,
-      note: unavailable(f, "not in play yet"),
+      note: unavailable(f, "not in play yet", firstMinute(f.id)),
       tooltip: f.effect_pp == null ? [] : [
         `${pct(0.5 + f.effect_pp / 100)} win chance`,
         `from an even game, with a ${typical(f.sd!, d?.unit ?? "")} lead (typical)`,
@@ -64,7 +69,7 @@ export function WinFactors() {
       value: f.lead_win_rate != null && f.lead_share > 0.001 ? (f.lead_win_rate - 0.5) * 100 : null,
       lo: f.lead_ci_low != null ? (f.lead_ci_low - 0.5) * 100 : null,
       hi: f.lead_ci_high != null ? (f.lead_ci_high - 0.5) * 100 : null,
-      note: unavailable(f, "no team ahead yet"),
+      note: unavailable(f, "no team ahead yet", firstMinute(f.id)),
       faded: f.lead_share < 0.05,
       tooltip: f.lead_win_rate == null ? [] : [
         `${pct(f.lead_win_rate)} won`,
@@ -201,7 +206,7 @@ export function WinFactors() {
                 <div className="title">{label(id)}<span>{defs.get(id)?.unit}</span></div>
                 <TrendSmall
                   name={label(id)} yDomain={yDomain} xDomain={xDomain} highlightX={cur?.minute}
-                  empty={defs.get(id)?.ranked_only && slice.queue !== "ranked" ? "Ranked matches only" : undefined}
+                  empty={defs.get(id)?.ranked_only && slice.queue !== "ranked" ? "Ranked matches only: set Queue to Ranked" : undefined}
                   formatY={(v) => pct(0.5 + v / 100, 0)}
                   points={(series.get(id) ?? []).map(({ m, f }) => ({
                     x: m, y: f.effect_pp!, lo: f.ci_low!, hi: f.ci_high!,
