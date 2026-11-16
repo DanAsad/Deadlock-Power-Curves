@@ -205,12 +205,15 @@ export function Findings() {
         <p>
           Item win rates are the next obvious chart, and they have the same problem as short games: the team that is
           ahead has more souls, so it buys more items, so almost every item "wins". Comparing each purchase with the
-          same hero in the same game state (the team's soul lead and the minute it was bought) shrinks the average
-          item edge from {avg((p) => p.raw).toFixed(1)} to {avg((p) => p.effect).toFixed(1)} percentage points.
+          same hero in the same game state (the team's soul lead, the buyer's own souls and the minute it was bought)
+          shrinks the average item edge from {avg((p) => p.raw).toFixed(1)} to {avg((p) => p.effect).toFixed(1)} percentage points.
           {bestItems.length > 0 && <> What is left still separates items: the biggest effects are {bestItems.map((b, i) => (
             <span key={b.id}>{i ? (i === bestItems.length - 1 ? " and " : ", ") : ""}<b>{b.name}</b> ({b.effect > 0 ? "+" : ""}{b.effect.toFixed(1)})</span>))}.
-            Part of what is left is still who buys: the adjustment uses the team's soul lead, not the buyer's own souls,
-            so expensive items keep a small edge from being bought by well-farmed players.</>}
+            </>}{" "}
+          One suspect turned out innocent: expensive items might look good only because a well-farmed player can afford them.
+          But once the team's lead is known, it makes no difference which player holds the souls (checked 16 Nov 2026 on 14 Nov's games: at an
+          even lead the team wins 49 to 50% whether the buyer is 30% richer or 30% poorer than the match's average player), and adding
+          the buyer's own souls moved no item by more than 0.2 points.
         </p>
         <Figure
           title="Raw vs adjusted, every item"

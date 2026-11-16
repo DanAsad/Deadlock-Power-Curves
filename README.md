@@ -223,9 +223,9 @@ Raw item win rates mostly measure who could afford the item: the team that is
 ahead has more souls and buys more. `pipeline/items.py` compares each purchase
 with **the same hero in the same game state**:
 
-- **State** = the minute bucket of the purchase (0–5, 5–10, … 40+) and the
-  buyer's team soul lead at the last stat snapshot before it (% of all souls,
-  2-point bins).
+- **State** = at the last stat snapshot before the purchase: the minute bucket
+  (0–5, 5–10, … 40+), the buyer's team soul lead (% of all souls, 2-point bins)
+  and the buyer's own souls vs the match's average player (15-point bins).
 - **Expected** = the win rate of every player-snapshot in that state, plus the
   hero's own edge beyond the game state.
 - **Effect** = buyers' win rate − expected, in percentage points, with a
@@ -236,17 +236,25 @@ with **the same hero in the same game state**:
 (raw edge over 15 points, real effect 0) and one with a real +5 point effect,
 and checks that the adjustment removes the first and keeps the second.
 
-**Result (16 Oct – 14 Nov 2026, 1.18 billion first purchases, 156 items):** the
+**Result (17 Oct – 15 Nov 2026, 1.20 billion first purchases, 156 items):** the
 adjustment cuts the average item edge from 2.5 to 1.1 percentage points (the
-two measures still correlate 0.85, so the order mostly survives). Highest after
-adjustment: Mystic Reverb (+3.8), Cheat Death (+3.4), Magic Carpet (+3.3), Spirit
-Burn (+3.3); lowest: Metal Skin (−4.0), Disarming Hex (−3.1), Rusted Barrel (−2.7).
+two measures still correlate 0.84, so the order mostly survives). Highest after
+adjustment: Mystic Reverb (+3.8), Cheat Death (+3.4), Magic Carpet (+3.2), Spirit
+Burn (+3.2); lowest: Metal Skin (−4.0), Disarming Hex (−3.1), Rusted Barrel (−2.8).
 
-**Limit:** the game state is the *team's* soul lead, not the buyer's own souls.
-Tier-4 items still average +1.8 points, partly because only a well-farmed player
-can buy one; defensive items such as Metal Skin are bought by players under
-pressure. Both ends therefore still carry some "why it was bought". The next step
-is to add the buyer's own share of the souls to the state.
+**The buyer's own souls (added 16 Nov 2026) change almost nothing:** 1.07 pp
+with the team lead only, 1.06 with own souls too, and no item moves by more than
+0.2 points. At a fixed team lead the team's win rate is flat across the buyer's
+own-souls bins (14 Nov, at an even lead: 49.8% to 50.5% from 15% poorer to 45%
+richer than the average player), so which player holds the souls does not matter once
+the team's lead is known. Tier-4 items still average +1.8 points, but not
+because only a well-farmed player can buy them. `effect_team` keeps the
+team-lead-only number for comparison.
+
+**Limits:** the state does not see the up-to-5 minutes since the last stat
+snapshot, so an item bought right after a won fight shares in that fight;
+defensive items such as Metal Skin are bought by players under pressure, so part
+of their low number is the situation, not the item.
 
 The Items page shows the raw-vs-adjusted scatter, the ranking, and each item
 split by purchase minute.
@@ -405,15 +413,15 @@ loss, lower is better.
   --segments-only`). Each was trained on its own matches only and tested
   against the shared model on the same held-out matches. None is better, and
   the narrower the group, the worse its own model does, because it has less
-  data to learn from (rerun 15 Nov 2026, tested on 14 Nov):
+  data to learn from (rerun 16 Nov 2026, minutes 1 to 60, tested on 15 Nov):
 
   | Trained and tested on | Training matches | Own log loss | Shared log loss | Gain (95% CI) |
   |---|---|---|---|---|
-  | Ranked | 260k | 0.5237 | 0.5236 | −0.0001 (−0.0004 to +0.0003) |
-  | Unranked | 400k (capped) | 0.5060 | 0.5060 | −0.0001 (−0.0002 to +0.0000) |
-  | Ranked, Initiate–Arcanist | 116k | 0.5184 | 0.5170 | −0.0010 (−0.0021 to +0.0001) |
-  | Ranked, Ritualist–Archon | 102k | 0.5290 | 0.5264 | −0.0034 (−0.0045 to −0.0022) |
-  | Ranked, Oracle–Eternus | 42k | 0.5403 | 0.5352 | −0.0072 (−0.0101 to −0.0044) |
+  | Ranked | 287k | 0.5248 | 0.5240 | −0.0007 (−0.0012 to −0.0002) |
+  | Unranked | 400k (capped) | 0.5074 | 0.5072 | −0.0003 (−0.0005 to −0.0001) |
+  | Ranked, Initiate–Arcanist | 130k | 0.5177 | 0.5166 | −0.0010 (−0.0021 to +0.0001) |
+  | Ranked, Ritualist–Archon | 114k | 0.5302 | 0.5290 | −0.0018 (−0.0030 to −0.0006) |
+  | Ranked, Oracle–Eternus | 43k | 0.5374 | 0.5324 | −0.0068 (−0.0096 to −0.0041) |
 
   The shared model already takes the queue as an input and has separate
   linear weights per queue, so it stays the only full model.

@@ -12,10 +12,11 @@ import { int, pct } from "../format";
 
 interface ItemInfo { id: number; name: string; tier: number | null; cost: number | null; slot: string | null; image: string | null }
 interface ItemsResponse {
-  first_day: string; last_day: string; min_games: number; buckets: string[]; items: ItemInfo[];
+  first_day: string; last_day: string; min_games: number; buckets: string[]; items: ItemInfo[]; own_souls?: boolean;
   cols: string[]; timing_cols: string[]; rows: (number | null)[][]; timing: Record<string, number[][]>;
 }
-interface ItemRow { item_id: number; n: number; win_rate: number; expected: number; effect: number; ci_low: number; ci_high: number; lead: number; median_bucket: number | null }
+interface ItemRow { item_id: number; n: number; win_rate: number; expected: number; effect: number; ci_low: number; ci_high: number; lead: number; median_bucket: number | null;
+  own?: number | null; effect_team?: number | null }   // own, effect_team: since 2026-11-16 (buyer's souls in the state)
 const signed = (v: number, d = 1) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(d)}`;
 const toObj = <T,>(cols: string[], r: (number | null)[]) => Object.fromEntries(cols.map((c, i) => [c, r[i]])) as T;
 
@@ -42,6 +43,8 @@ export function Items() {
     effect: x.effect, n: x.n, selected: x.item_id === selId }));
   const rawMean = points.length ? points.reduce((s, p) => s + Math.abs(p.raw), 0) / points.length : 0;
   const adjMean = points.length ? points.reduce((s, p) => s + Math.abs(p.effect), 0) / points.length : 0;
+  const own = !!r.data?.own_souls;
+  const teamMean = own && shown.length ? shown.reduce((s, x) => s + Math.abs(x.effect_team ?? 0), 0) / shown.length : null;
   const ranked = all || shown.length <= 24 ? shown : [...shown.slice(0, 12), ...shown.slice(-12)];
   const bars: EffectRow[] = ranked.map((x) => ({
     id: String(x.item_id), label: name(x.item_id), value: x.effect, lo: x.ci_low, hi: x.ci_high,
@@ -61,8 +64,8 @@ export function Items() {
       <h1>Items</h1>
       <p className="lede">
         Which items actually win games? Not the raw win rate: the team that is ahead has more souls and buys more, so
-        nearly every item looks good. Each purchase is compared with the same hero in the same game state (the team's
-        soul lead and the minute when it was bought).
+        nearly every item looks good. Each purchase is compared with the same hero in the same game state: the team's
+        soul lead, {r.data?.own_souls ? "the buyer's own souls, " : ""}and the minute when it was bought.
       </p>
       <FilterBar count={r.data ? `${int(rows.reduce((a, x) => a + x.n, 0))} purchases` : undefined}
                  range={r.data ? `${r.data.first_day} – ${r.data.last_day}` : undefined} />
@@ -106,6 +109,9 @@ export function Items() {
               <div className="tile"><div className="label">Effect beyond the game state</div><div className="value">{signed(sel.effect)} pp</div><div className="sub">95% CI {signed(sel.ci_low)} to {signed(sel.ci_high)}</div></div>
               <div className="tile"><div className="label">Buyers won</div><div className="value">{pct(sel.win_rate)}</div><div className="sub">expected {pct(sel.expected)} from hero and game state</div></div>
               <div className="tile"><div className="label">Team soul lead when bought</div><div className="value">{signed(sel.lead)}%</div><div className="sub">of all souls, on average</div></div>
+              {sel.own != null && (
+                <div className="tile"><div className="label">Buyer's own souls when bought</div><div className="value">{signed(sel.own, 0)}%</div><div className="sub">vs the match's average player</div></div>
+              )}
               <div className="tile"><div className="label">Purchases</div><div className="value">{int(sel.n)}</div><div className="sub">{sel.median_bucket != null && r.data ? `usually bought at ${r.data.buckets[sel.median_bucket]} min` : ""}</div></div>
             </div>
             {timingBars.length > 1 && (
@@ -122,8 +128,9 @@ export function Items() {
           <div className="card">
             <h2>Raw vs adjusted</h2>
             <p className="muted small" style={{ margin: "0 0 6px" }}>
-              Average size of the raw edge {rawMean.toFixed(1)} pp; after the adjustment {adjMean.toFixed(1)} pp. Points below the
-              dashed line on the right got part of their raw edge from the game state, not the item.
+              Average size of the raw edge {rawMean.toFixed(1)} pp;
+              {teamMean != null ? <> {teamMean.toFixed(1)} pp after accounting for the team's soul lead, and {adjMean.toFixed(1)} pp once the buyer's own souls are added.</> : <> after the adjustment {adjMean.toFixed(1)} pp.</>}{" "}
+              Points below the dashed line on the right got part of their raw edge from the game state, not the item.
             </p>
             <SlotLegend />
             <ItemScatter points={points} onSelect={select} />
@@ -164,13 +171,17 @@ export function Items() {
         <span aria-hidden>ⓘ</span>
         <span>
           <b>How it works.</b> For every player at every stat snapshot, the win rate is measured by game minute and team soul
-          lead (2-point bins); each hero also gets its own edge beyond that. An item's expected win rate is that baseline for
+          lead (2-point bins){own ? <>, and the player's own souls compared with the match's average player (15-point bins)</> : null}; each hero also gets its own edge beyond that. An item's expected win rate is that baseline for
           its buyers' heroes, minutes and leads at the moment they bought it. A player's first purchase of an item counts
           once; matches where someone left are not counted; items need {r.data ? int(r.data.min_games) : "2,000"} purchases.
-          This still is not a controlled experiment. The state is the <i>team's</i> soul lead, not the buyer's own
-          souls, so expensive items still look a little better (only a well-farmed player can buy them), and
-          defensive or counter items are often bought by players already under pressure. Teammates' purchases in the same match
-          are not independent, so the intervals are a little narrow.
+          This still is not a controlled experiment.{" "}
+          {own
+            ? <>The state does not see what happens between stat snapshots (up to 5 minutes), and
+              defensive or counter items are often bought by players already under pressure, so some of their low numbers are the
+              situation, not the item.</>
+            : <>The state is the <i>team's</i> soul lead, not the buyer's own souls, so expensive items still look a little better
+              (only a well-farmed player can buy them), and defensive or counter items are often bought by players already under pressure.</>}{" "}
+          Teammates' purchases in the same match are not independent, so the intervals are a little narrow.
         </span>
       </p>
     </>

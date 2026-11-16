@@ -4,12 +4,16 @@ Raw item win rates are misleading: the team that is ahead has more souls and buy
 more (and bigger) items, so almost every item "wins". Here each purchase is
 compared with the same hero in the same game state:
 
-  state      the minute bucket of the purchase and the buyer's team soul lead at
-             the last stat snapshot before it (in % of all souls, 2-point bins)
+  state      at the last stat snapshot before the purchase: the minute bucket, the
+             buyer's team soul lead (in % of all souls, 2-point bins) and the buyer's
+             own souls vs the average player in the match (15-point bins). The own
+             souls matter: only a well-farmed player can afford an expensive item,
+             and a team lead alone left that bias in (it1, before 2026-11-16).
   expected   the win rate of all player-snapshots in that state (baseline), plus
              the hero's own edge beyond the game state (strong heroes win more
              from any position)
   effect     observed win rate of the buyers minus expected, in percentage points
+  effect_team  the same with the team soul lead only (the it1 method), for comparison
 
 Each player's first purchase of an item counts once. 95% CIs are binomial on the
 observed rate (purchases by teammates in one match are not independent, so they
@@ -33,12 +37,14 @@ from pipeline.extract import MIN_DURATION_S, _rank_sql, assign_period
 from pipeline.stats import Z95
 from pipeline.win_factors import CACHE, FINAL_AFTER_DAYS, _query, _save
 
-VERSION = "it1"
+VERSION = "it2"          # it2: the buyer's own souls are part of the state
 MEMORY_LIMIT = "10GB"            # a day of item lists needed more than 6 GB at peak
 MIN_ITEM_GAMES = 2000                       # items with fewer purchases in a slice are not shown
 MIN_BUCKET_GAMES = 500                      # nor purchase-minute buckets with fewer than this
 LEAD_BIN = 2                                # % of all souls
 LEAD_CLIP = 20
+OWN_BIN = 15                                # % above or below the match's average player
+OWN_CLIP = 45
 # purchase-minute buckets: upper bounds in minutes (the last one is open)
 BUCKETS = [5, 10, 15, 20, 25, 30, 40, 10_000]
 BUCKET_LABELS = ["0–5", "5–10", "10–15", "15–20", "20–25", "25–30", "30–40", "40+"]
@@ -71,8 +77,15 @@ players AS (
 ),
 snap AS (
     SELECT * FROM (
-        SELECT match_id, team, duration_s, unnest(ts)::BIGINT AS t, unnest(nw)::DOUBLE AS nw FROM players)
+        SELECT match_id, hero_id, team, duration_s, unnest(ts)::BIGINT AS t, unnest(nw)::DOUBLE AS nw FROM players)
     WHERE t > 0 AND t < duration_s
+),
+player_own AS (     -- each player's souls vs the match's average player at each snapshot, in %
+    SELECT match_id, hero_id, t, 100 * (nw * cnt / lobby - 1) AS own FROM (
+        SELECT match_id, hero_id, t, nw, sum(nw) OVER (PARTITION BY match_id, t) AS lobby,
+               count(*) OVER (PARTITION BY match_id, t) AS cnt
+        FROM snap)
+    WHERE lobby > 0 AND cnt = 12
 ),
 team_lead AS (      -- each team's soul lead at each snapshot, % of all souls
     SELECT match_id, team, t, 100 * (2 * own - lobby) / lobby AS lead FROM (
@@ -82,8 +95,9 @@ team_lead AS (      -- each team's soul lead at each snapshot, % of all souls
     WHERE lobby > 0 AND teams = 2
 ),
 base AS (           -- every player at every snapshot: the game-state baseline
-    SELECT p.start_time, p.hero_id, p.queue, p.average_badge, p.leaver, p.won, l.t, l.lead
+    SELECT p.start_time, p.hero_id, p.queue, p.average_badge, p.leaver, p.won, l.t, l.lead, o.own
     FROM players p JOIN team_lead l ON p.match_id = l.match_id AND p.team = l.team
+                   JOIN player_own o ON o.match_id = p.match_id AND o.hero_id = p.hero_id AND o.t = l.t
 ),
 buys AS (           -- first purchase of each shop item per player
     SELECT match_id, hero_id, team, won, start_time, queue, average_badge, leaver, item_id, min(bt) AS bt FROM (
@@ -93,22 +107,36 @@ buys AS (           -- first purchase of each shop item per player
     WHERE item_id IN ({items}) AND bt > 0
     GROUP BY ALL
 ),
-at_buy AS (
+at_lead AS (
     SELECT b.*, coalesce(l.lead, 0) AS lead
     FROM buys b ASOF LEFT JOIN team_lead l ON b.match_id = l.match_id AND b.team = l.team AND b.bt >= l.t
 ),
-rows AS (
-    SELECT start_time, hero_id, queue, average_badge, leaver, won, item_id, bt AS t, lead FROM at_buy
-    UNION ALL
-    SELECT start_time, hero_id, queue, average_badge, leaver, won, 0 AS item_id, t, lead FROM base
+at_buy AS (         -- before the first snapshot everyone is level: own = 0
+    SELECT b.*, coalesce(o.own, 0) AS own
+    FROM at_lead b ASOF LEFT JOIN player_own o ON b.match_id = o.match_id AND b.hero_id = o.hero_id AND b.bt >= o.t
+),
+binned AS (
+    SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, queue, {rank} AS rank, leaver, won,
+           item_id, hero_id::SMALLINT AS hero_id, ({bucket})::TINYINT AS bucket,
+           (greatest(-{clip}, least({clip}, round(lead / {bin}) * {bin})))::TINYINT AS lead_bin,
+           (greatest(-{own_clip}, least({own_clip}, round(own / {own_bin}) * {own_bin})))::TINYINT AS own_bin
+    FROM (SELECT start_time, hero_id, queue, average_badge, leaver, won, item_id, bt AS t, lead, own FROM at_buy
+          UNION ALL
+          SELECT start_time, hero_id, queue, average_badge, leaver, won, 0 AS item_id, t, lead, own FROM base)
 )
-SELECT (start_time AT TIME ZONE 'UTC')::DATE AS day, queue, {rank} AS rank, leaver,
-       item_id, hero_id::SMALLINT AS hero_id,
-       ({bucket})::TINYINT AS bucket,
-       (greatest(-{clip}, least({clip}, round(lead / {bin}) * {bin})))::TINYINT AS lead_bin,
-       count(*)::INT AS n, sum(won::INT)::INT AS wins
-FROM rows GROUP BY ALL
+-- The expected rate is additive (state win rate + hero edge), so purchases are counted two ways
+-- instead of by hero x state, which keeps the table small:
+--   baseline (item 0): hero x state;  purchases: item x state (hero_id = -1)  and  item x hero x minute (bins = 127)
+SELECT day, queue, rank, leaver, item_id, hero_id, bucket, lead_bin, own_bin, count(*)::INT AS n, sum(won::INT)::INT AS wins
+FROM binned WHERE item_id = 0 GROUP BY ALL
+UNION ALL
+SELECT day, queue, rank, leaver, item_id, -1::SMALLINT, bucket, lead_bin, own_bin, count(*)::INT, sum(won::INT)::INT
+FROM binned WHERE item_id <> 0 GROUP BY ALL
+UNION ALL
+SELECT day, queue, rank, leaver, item_id, hero_id, bucket, 127::TINYINT, 127::TINYINT, count(*)::INT, sum(won::INT)::INT
+FROM binned WHERE item_id <> 0 GROUP BY ALL
 """
+ALL_BINS = 127                  # lead_bin / own_bin of the item x hero rows: summed over every state
 
 
 def _bucket_sql(col: str = "t") -> str:
@@ -139,7 +167,7 @@ def fetch(days: int, item_ids: list[int], refresh: bool = False) -> pd.DataFrame
         t0 = time.time()
         raw = RAW.format(day=d, next_day=d + timedelta(days=1), min_duration=MIN_DURATION_S)
         sql = DAY.format(items=",".join(map(str, item_ids)), rank=_rank_sql(), bucket=_bucket_sql(),
-                         clip=LEAD_CLIP, bin=LEAD_BIN)
+                         clip=LEAD_CLIP, bin=LEAD_BIN, own_clip=OWN_CLIP, own_bin=OWN_BIN)
 
         def run(c, raw=raw, sql=sql):
             # the connection already spills to data/cache/duckdb_tmp; setting that again fails once it was used
@@ -152,45 +180,74 @@ def fetch(days: int, item_ids: list[int], refresh: bool = False) -> pd.DataFrame
         if r is None:
             print(f"  {d}: skipped after 3 attempts", flush=True)
             continue
-        r = r.astype({"item_id": "int64", "hero_id": "int16", "bucket": "int8", "lead_bin": "int8", "n": "int64", "wins": "int64"})
+        r = r.astype({"item_id": "int64", "hero_id": "int16", "bucket": "int8", "lead_bin": "int8", "own_bin": "int8",
+                      "n": "int64", "wins": "int64"})
         _save(r, path, {"it_version": VERSION})
         out.append(r)
         print(f"  {d}: {int(r[r['item_id'] != 0]['n'].sum()):,} purchases ({time.time() - t0:.0f}s)", flush=True)
     return pd.concat(out, ignore_index=True)
 
 
-def effects(rows: pd.DataFrame) -> pd.DataFrame:
-    """One slice: per item, overall (bucket -1) and per purchase-minute bucket.
-    `rows`: item_id (0 = baseline), hero_id, bucket, lead_bin, n, wins."""
-    base = rows[rows["item_id"] == 0]
-    state = base.groupby(["bucket", "lead_bin"])[["n", "wins"]].sum()
-    state_wr = (state["wins"] / state["n"]).rename("state_wr")
-    # each hero's edge beyond the game state, from its own snapshots
-    b = base.join(state_wr, on=["bucket", "lead_bin"])
+def _split(rows: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Baseline (hero x state), purchases by item x state, purchases by item x hero x minute.
+    Accepts the compact cache layout (see DAY) or one row per item x hero x state (tests)."""
+    if "own_bin" not in rows:
+        rows = rows.assign(own_bin=0)
+    base, it = rows[rows["item_id"] == 0], rows[rows["item_id"] != 0]
+    keys = ["item_id", "bucket", "lead_bin", "own_bin"]
+    if (it["hero_id"] == -1).any():
+        by_state = it[it["hero_id"] == -1]
+        by_hero = it[it["lead_bin"] == ALL_BINS]
+    else:
+        by_state = it.groupby(keys, as_index=False)[["n", "wins"]].sum()
+        by_hero = it.groupby(["item_id", "hero_id", "bucket"], as_index=False)[["n", "wins"]].sum()
+    return base, by_state, by_hero
+
+
+def _parts(base: pd.DataFrame, state: list[str]) -> tuple[pd.Series, pd.Series]:
+    """Win rate of each game state, and each hero's edge beyond the state (from its own snapshots)."""
+    st = base.groupby(state)[["n", "wins"]].sum()
+    state_wr = (st["wins"] / st["n"]).rename("state_wr")
+    b = base.join(state_wr, on=state)
     hero_edge = ((b["wins"] - b["n"] * b["state_wr"]).groupby(b["hero_id"]).sum()
                  / b.groupby("hero_id")["n"].sum()).rename("hero_edge")
-    it = rows[rows["item_id"] != 0].join(state_wr, on=["bucket", "lead_bin"]).join(hero_edge, on="hero_id")
-    it["exp_w"] = it["n"] * (it["state_wr"].fillna(0.5) + it["hero_edge"].fillna(0.0))
-    it["lead_w"] = it["n"] * it["lead_bin"]
-    it["t_w"] = it["n"] * it["bucket"]
+    return state_wr, hero_edge
 
-    def summarise(g: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
-        s = g.groupby(keys)[["n", "wins", "exp_w", "lead_w"]].sum().reset_index()
-        s["win_rate"] = s["wins"] / s["n"]
-        s["expected"] = s["exp_w"] / s["n"]
-        s["lead"] = s["lead_w"] / s["n"]                       # average team soul lead when bought
-        se = np.sqrt(s["win_rate"] * (1 - s["win_rate"]) / s["n"])
-        s["effect"] = (s["win_rate"] - s["expected"]) * 100
-        s["ci_low"], s["ci_high"] = s["effect"] - Z95 * se * 100, s["effect"] + Z95 * se * 100
-        return s.drop(columns=["exp_w", "lead_w"])
 
-    overall = summarise(it, ["item_id"]).assign(bucket=-1)
+def effects(rows: pd.DataFrame) -> pd.DataFrame:
+    """One slice: per item, overall (bucket -1) and per purchase-minute bucket.
+    Expected = the state's baseline win rate + the hero's edge beyond the state, so the
+    purchases' state part and hero part can be summed separately."""
+    base, by_state, by_hero = _split(rows)
+    full, team = ["bucket", "lead_bin", "own_bin"], ["bucket", "lead_bin"]
+    s = by_state.copy()
+    h = by_hero.copy()
+    for name, state in (("", full), ("_team", team)):
+        state_wr, hero_edge = _parts(base, state)
+        s[f"st{name}"] = s["n"] * s.join(state_wr, on=state)["state_wr"].fillna(0.5)
+        h[f"he{name}"] = h["n"] * h.join(hero_edge, on="hero_id")["hero_edge"].fillna(0.0)
+    s["lead_w"], s["own_w"] = s["n"] * s["lead_bin"], s["n"] * s["own_bin"]
+
+    def summarise(keys: list[str]) -> pd.DataFrame:
+        a = s.groupby(keys)[["n", "wins", "st", "st_team", "lead_w", "own_w"]].sum()
+        a = a.join(h.groupby(keys)[["he", "he_team"]].sum()).fillna({"he": 0.0, "he_team": 0.0}).reset_index()
+        a["win_rate"] = a["wins"] / a["n"]
+        a["expected"] = (a["st"] + a["he"]) / a["n"]
+        a["lead"] = a["lead_w"] / a["n"]                       # average team soul lead when bought
+        a["own"] = a["own_w"] / a["n"]                         # average buyer's souls vs the match average, %
+        se = np.sqrt(a["win_rate"] * (1 - a["win_rate"]) / a["n"])
+        a["effect"] = (a["win_rate"] - a["expected"]) * 100
+        a["effect_team"] = (a["win_rate"] - (a["st_team"] + a["he_team"]) / a["n"]) * 100
+        a["ci_low"], a["ci_high"] = a["effect"] - Z95 * se * 100, a["effect"] + Z95 * se * 100
+        return a.drop(columns=["st", "st_team", "he", "he_team", "lead_w", "own_w"])
+
+    overall = summarise(["item_id"]).assign(bucket=-1)
     # typical purchase minute: the bucket holding the median purchase
-    cum = it.groupby(["item_id", "bucket"])["n"].sum().groupby(level=0).cumsum()
-    tot = it.groupby("item_id")["n"].sum()
+    cum = s.groupby(["item_id", "bucket"])["n"].sum().groupby(level=0).cumsum()
+    tot = s.groupby("item_id")["n"].sum()
     med = cum[cum >= tot.reindex(cum.index.get_level_values(0)).to_numpy() / 2].reset_index().groupby("item_id")["bucket"].first()
     overall["median_bucket"] = overall["item_id"].map(med)
-    timing = summarise(it, ["item_id", "bucket"])
+    timing = summarise(["item_id", "bucket"])
     shown = set(overall.loc[overall["n"] >= MIN_ITEM_GAMES, "item_id"])
     timing = timing[timing["item_id"].isin(shown) & (timing["n"] >= MIN_BUCKET_GAMES)]
     return pd.concat([overall[overall["item_id"].isin(shown)], timing], ignore_index=True)
@@ -198,7 +255,8 @@ def effects(rows: pd.DataFrame) -> pd.DataFrame:
 
 def build(raw: pd.DataFrame) -> pd.DataFrame:
     raw = raw[~raw["leaver"].astype(bool)]
-    s = expand_slices(assign_period(raw), ["n", "wins"], ["item_id", "hero_id", "bucket", "lead_bin"])
+    dims = ["item_id", "hero_id", "bucket", "lead_bin"] + (["own_bin"] if "own_bin" in raw else [])
+    s = expand_slices(assign_period(raw), ["n", "wins"], dims)
     out = [effects(g).assign(queue=q, rank=r, period=p) for (q, r, p), g in s.groupby(SLICE_KEYS)]
     t = pd.concat(out, ignore_index=True)
     return t.astype({"item_id": "int64", "bucket": "int8", "n": "int64", "wins": "int64"})
@@ -218,11 +276,14 @@ def main():
     seen = set(t["item_id"].unique())
     (C.DATA_DIR / "items.json").write_text(json.dumps({
         "first_day": str(days[0]), "last_day": str(days[-1]), "min_games": MIN_ITEM_GAMES,
-        "buckets": BUCKET_LABELS, "leavers_excluded": True,
+        "buckets": BUCKET_LABELS, "leavers_excluded": True, "own_souls": True,
         "items": [x for x in items if x["id"] in seen]}, indent=1), encoding="utf-8")
     a = t[(t["queue"] == "all") & (t["rank"] == "all") & (t["period"] == "all") & (t["bucket"] == -1)]
     print(f"{len(t):,} rows over {t.groupby(SLICE_KEYS).ngroups} slices; {len(a)} items in the all slice")
-    print(a.assign(raw=(a["win_rate"] - 0.5) * 100).sort_values("effect")[["item_id", "n", "win_rate", "expected", "effect", "raw"]]
+    raw_edge = (a["win_rate"] - 0.5) * 100
+    print(f"average |edge|: raw {raw_edge.abs().mean():.2f} pp, team lead only {a['effect_team'].abs().mean():.2f}, "
+          f"with own souls {a['effect'].abs().mean():.2f}")
+    print(a.assign(raw=raw_edge).sort_values("effect")[["item_id", "n", "win_rate", "expected", "effect", "effect_team", "own", "raw"]]
           .round(3).to_string(max_rows=20))
 
 
