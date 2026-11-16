@@ -227,6 +227,7 @@ tr.dim td { color: var(--muted); }
   .theme-btn { padding: 4px 8px; margin-left: auto; }
   main { padding: 16px 16px 48px; }
   .sample { margin-left: 0; text-align: left; width: 100%; }
+  .seg { flex-wrap: wrap; max-width: 100%; }        /* e.g. 14 game minutes (3 to 60) wrap instead of widening the page */
 }
 
 /* Win probability page */

@@ -23,7 +23,7 @@ from pipeline.win_factors import CACHE, LIST_COLS, _compact, _query, _read_rows,
 
 MODEL_DIR = DATA_DIR / "model"
 OUT = DATA_DIR / "win_probability.json"
-MAX_MINUTE = 45                       # the model's time grid ends here
+MAX_MINUTE = 60                       # the model's time grid ends here (win_factors_sql.MAX_S)
 
 OBJECTIVE_LABEL = [("Tier1", "guardian", "Guardian"), ("Tier2", "walker", "Walker"),
                    ("BarrackBoss", "base_guardian", "Base Guardian"),
@@ -40,11 +40,11 @@ def load_models():
 def fetch_matches(match_ids: list[int]) -> dict[str, pd.DataFrame] | None:
     """Per-minute rows plus raw events for these matches, straight from the lake."""
     from pipeline.extract import MIN_DURATION_S, _rank_sql
-    from pipeline.win_factors_sql import DAY_SQL, OBJECTIVE_KIND, RAW_MATCHES, RAW_SQL, SGN, SNAPSHOT_S
+    from pipeline.win_factors_sql import DAY_SQL, OBJECTIVE_KIND, RAW_MATCHES, RAW_SQL, SGN, SNAPSHOT_S, MAX_S
     raw = RAW_SQL.format(where=RAW_MATCHES.format(ids=",".join(str(int(i)) for i in match_ids)),
                          min_duration=MIN_DURATION_S)
     day = DAY_SQL.format(snapshots=",".join(map(str, SNAPSHOT_S)), mod=1, rem=0,      # every minute, every match
-                         kind=OBJECTIVE_KIND, rank=_rank_sql(), sgn=SGN)
+                         kind=OBJECTIVE_KIND, rank=_rank_sql(), sgn=SGN, max_s=MAX_S)
     one = "(SELECT * FROM wf_raw QUALIFY row_number() OVER (PARTITION BY match_id ORDER BY player_slot) = 1)"
     players = "(SELECT * FROM wf_raw QUALIFY row_number() OVER (PARTITION BY match_id, hero_id ORDER BY player_slot) = 1)"
 

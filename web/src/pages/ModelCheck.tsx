@@ -72,7 +72,8 @@ export function ModelCheck() {
   const uvf = cur?.unified_vs_full;
   const mins = sp?.minutes ?? [];
   const em = sp?.every_minute;
-  const emAll = em?.between_snapshots.find((b) => b.from === 1 && b.to === 45);
+  const emLast = Math.max(45, ...(em?.between_snapshots ?? []).map((b) => b.to));     // 45 before 2026-11-16, then 60
+  const emAll = em?.between_snapshots.find((b) => b.from === 1 && b.to === emLast);
 
   const ablRows: EffectRow[] = (cur?.ablation ?? [])
     .slice().sort((a, b) => (b.share_of_gain ?? 0) - (a.share_of_gain ?? 0))
@@ -263,7 +264,7 @@ export function ModelCheck() {
           <div className="card" style={{ marginBottom: 16 }}>
             <h2>Every game minute</h2>
             <span className="muted small">
-              The full model at each minute from 1 to 45, on {int(em.matches)} test matches that have a row per minute.
+              The full model at each minute from 1 to {emLast}, on {int(em.matches)} test matches that have a row per minute.
               Player stats are only recorded every 3 to 5 minutes, so between those snapshots the model works with the
               last recorded values (up to 4 minutes old) and is told how old they are; objectives, deaths and respawn
               timers are exact at every minute. That is why the line steps down at each snapshot.
@@ -284,7 +285,7 @@ export function ModelCheck() {
                 <tbody>
                   {em.between_snapshots.map((b) => (
                     <tr key={`${b.from}-${b.to}`}>
-                      <td>{b.from === 1 && b.to === 45 ? "All" : `${b.from}–${b.to}`}</td><td>{int(b.rows)}</td>
+                      <td>{b.from === 1 && b.to === emLast ? "All" : `${b.from}–${b.to}`}</td><td>{int(b.rows)}</td>
                       <td>{f4(b.every_minute_log_loss)}</td><td>{f4(b.snapshot_only_log_loss)}</td>
                       <td>{f4(b.delta_log_loss)} ({ci(b)})</td>
                       <td>{pct(b.every_minute_ece, 1)}</td><td>{pct(b.snapshot_only_ece, 1)}</td>

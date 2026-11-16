@@ -60,6 +60,11 @@ FREE = {"momentum", "carry_concentration", "draft_scaling"}      # never constra
 CONTEXT = ["minute", "total_souls", "stale", "ranked", *FLAGS]   # same for both teams
 P_CLIP = 1e-4
 MIN_ROWS = 2000                                                  # per minute, to fit linear weights
+# Prior on each linear weight per raw unit of its factor (penalty w^2 / 2): negligible for
+# dense factors, but a rare event (a ranked shrine down by minute 17, a guardian by minute 4)
+# whose few rows all won no longer gets a near-infinite weight (it had ~11 log-odds per shrine
+# before 2026-11-16, which showed as a one-minute spike to 0.02% in match 137934907).
+RAW_PRIOR = 1.0
 _SNAPS = np.array([0] + SNAP_MIN)
 
 
@@ -109,7 +114,8 @@ class WinModel:
             sd = X.std(axis=0)
             ok = (sd > 1e-9) & ((X != 0).mean(axis=0) > 0.001)
             Z = np.column_stack([np.ones(len(g)), X[:, ok] / sd[ok]])
-            beta, _ = logit_fit(Z, g["team0_won"].to_numpy(float))
+            ridge = np.r_[0.0, np.maximum(1e-3, RAW_PRIOR / sd[ok] ** 2)]   # w = beta_z / sd, so w^2 = beta_z^2 / sd^2
+            beta, _ = logit_fit(Z, g["team0_won"].to_numpy(float), ridge=ridge)
             w = np.zeros(len(self.diffs))
             w[ok] = beta[1:] / sd[ok]
             mins.append(float(mnt))

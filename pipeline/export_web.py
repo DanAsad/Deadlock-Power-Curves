@@ -70,7 +70,7 @@ def priors_json(before: date) -> dict:
     scale, wr, _ = hero_priors(before)
     S, C = pair_priors(before)
     ids = sorted(int(h) for h in wr)
-    pairs = lambda M, sym: [[a, b, round(float(M[a, b]), 6)] for a in ids for b in ids
+    pairs = lambda M, sym: [[a, b, round(float(M[a, b]), 8)] for a in ids for b in ids
                             if (a < b if sym else a != b) and abs(M[a, b]) > 1e-9]
     from pipeline.extract import MIN_DURATION_S
     from pipeline.patches import MIN_DAYS_ON_PATCH, load
@@ -80,8 +80,8 @@ def priors_json(before: date) -> dict:
               "form_prior": FORM_PRIOR, "farm_prior": FARM_PRIOR, "mastery_prior": MASTERY_PRIOR,
               "experience_cap": EXPERIENCE_CAP, "history_days": HISTORY_DAYS, "min_duration_s": MIN_DURATION_S,
               "patches": load(), "min_days_on_patch": MIN_DAYS_ON_PATCH}
-    return {"as_of": str(before), "player": player, "heroes": {str(h): {"scaling": round(float(scale.get(h, 0.0)), 5),
-                                                      "win_rate": round(float(wr.get(h, 0.5)), 6)} for h in ids},
+    return {"as_of": str(before), "player": player, "heroes": {str(h): {"scaling": round(float(scale.get(h, 0.0)), 7),
+                                                      "win_rate": round(float(wr.get(h, 0.5)), 8)} for h in ids},
             "synergy": pairs(S, True), "counter": [p for p in pairs(C, False) if p[0] < p[1]]}
 
 
@@ -125,6 +125,9 @@ def write_fixtures(match_ids: list[int], models) -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     day = min(pd.Timestamp(d).date() for d in rows["day"].unique())
     (FIXTURES / "priors.json").write_text(json.dumps(priors_json(day)), encoding="utf-8")
+    for old in FIXTURES.glob("*.json"):     # every fixture shares priors.json: older ones would no longer match
+        if old.stem != "priors" and old.stem not in {str(m) for m in match_ids}:
+            old.unlink()
     for mid in match_ids:
         req = urllib.request.Request(METADATA_URL.format(id=mid), headers=UA)
         with urllib.request.urlopen(req, timeout=60) as r:

@@ -40,6 +40,9 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
 const EVENT_NAMES: [string, string][] = [["guardian", "Guardian"], ["walker", "Walker"], ["base_guardian", "Base Guardian"],
   ["shrine", "Shrine"], ["patron", "Patron"], ["mid_boss", "Mid-Boss"]];
 
+/** A winner's low point: one decimal under 1%, and "under 0.1%" below that (not "0.0%"). */
+const lowPct = (p: number) => (p < 0.001 ? "under 0.1%" : pct(p, p < 0.01 ? 1 : 0));
+
 export function WinProbability() {
   const [params, setParams] = useSearchParams();
   const list = useApi<ListResponse>("win-probability");
@@ -84,7 +87,7 @@ export function WinProbability() {
             <span className="muted small">{x.blurb}</span>
             <span className="small">
               {clock(x.duration_s)} · {x.queue} · {TEAMS[x.winner]} won
-              {x.lowest_winner_chance != null && <> · low point {pct(x.lowest_winner_chance, x.lowest_winner_chance < 0.01 ? 1 : 0)}</>}
+              {x.lowest_winner_chance != null && <> · low point {lowPct(x.lowest_winner_chance)}</>}
             </span>
           </button>
         ))}
@@ -111,7 +114,7 @@ export function WinProbability() {
           <>
             <div className="tiles">
               <Tile label="Result" value={`${TEAMS[m.winner]} won`} sub={`${clock(m.duration_s)} · ${m.queue} · match ${m.match_id}`} />
-              <Tile label="Winner's lowest win chance" value={low != null ? pct(low, low < 0.01 ? 1 : 0) : "–"} sub={lowAt != null ? `at minute ${lowAt}` : ""} />
+              <Tile label="Winner's lowest win chance" value={low != null ? lowPct(low) : "–"} sub={lowAt != null ? `at minute ${lowAt}` : ""} />
               <Tile label="Favourite changed" value={`${flips} time${flips === 1 ? "" : "s"}`} sub="line crossing 50%" />
               <Tile label="Biggest one-minute swing" value={`${Math.round(Math.abs(swing) * 100)} pts`}
                     sub={swing ? `toward ${TEAMS[swing > 0 ? 0 : 1]} at minute ${swingAt}` : ""} />
@@ -187,7 +190,7 @@ export function WinProbability() {
               )}
               {m.truncated && (
                 <p className="muted small" style={{ margin: "6px 0 0" }}>
-                  This match ran past minute {data?.max_minute ?? 45}, where the model's timeline ends, so the line stops there. The model's training rows stop at minute 45, so it has never been tested later in a game (about 1 match in 6 runs longer).
+                  This match ran past minute {data?.max_minute ?? 60}, where the model's timeline ends, so the line stops there. The model's training rows stop at that minute, so it has never been tested later in a game (about 1 match in 100 runs longer).
                 </p>
               )}
             </div>

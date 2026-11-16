@@ -21,7 +21,7 @@ Per split, over all snapshot minutes:
     new-player, wide-skill party)
   * queue models: would a separate model per queue beat the shared one?
 Time split only:
-  * every minute: the unified model at each game minute 1-45, and whether
+  * every minute: the unified model at each game minute 1-60, and whether
     training on every minute beats training on snapshot minutes only
 
 Writes data/model_eval.json and data/model/win_model*.joblib.
@@ -51,7 +51,7 @@ for fid, _, _, _, grp in FACTORS:
 GROUP_LABELS = {"economy": "Economy", "fights": "Fights", "objectives": "Objectives", "pre-game": "Pre-game"}
 EPS = 1e-12
 SAVE_MODELS = True          # False on --demo when real results exist, so a test run never replaces them
-BANDS = [(1, 15), (16, 30), (31, 45)]
+BANDS = [(1, 15), (16, 30), (31, 45), (46, 60)]
 
 
 def fit_predict(train: pd.DataFrame, test: pd.DataFrame, feats: list[str]) -> np.ndarray:
@@ -229,7 +229,7 @@ def every_minute(df: pd.DataFrame, fit: pd.Series, calib: pd.Series, te: pd.Seri
     yo, ids, mo = off["team0_won"].to_numpy(float), off["match_id"].to_numpy(), off["minute"].to_numpy()
     p1, p2 = p_uni.loc[off.index].to_numpy(), model_snap.predict(off)
     bands = []
-    for lo, hi in [*BANDS, (1, 45)]:
+    for lo, hi in [*BANDS, (1, 60)]:
         k = (mo >= lo) & (mo <= hi)
         if k.sum() < 1000:
             continue

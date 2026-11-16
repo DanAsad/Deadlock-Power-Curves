@@ -19,7 +19,7 @@ export function TrendSmall({ points, name, yDomain, xDomain, formatY, height = 1
   const x = linear(xDomain, [m.l, W - m.r]);
   const y = linear(yDomain, [H - m.b, m.t]);
   const yt = ticks(yDomain[0], yDomain[1], niceStep(yDomain[1] - yDomain[0], 3));
-  const xt = [10, 20, 30, 40].filter((t) => t >= xDomain[0] && t <= xDomain[1]);
+  const xt = [10, 20, 30, 40, 50, 60].filter((t) => t >= xDomain[0] && t <= xDomain[1]);
   const pts = [...points].sort((a, b) => a.x - b.x);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p.x)},${y(p.y)}`).join("");
   const band = pts.map((p, i) => `${i ? "L" : "M"}${x(p.x)},${y(p.hi)}`).join("") +

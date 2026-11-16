@@ -44,14 +44,26 @@ jobs:
 
       - name: Patch dates
         run: python -m pipeline.patches
+      # Each pull has its own time limit and may fail without stopping the job: the day
+      # caches are then still saved, an unfinished table keeps its committed version,
+      # and the next run continues from the cached days (a first run with an empty
+      # cache may need two or three runs to catch up).
       - name: Power curves and scaling index
         run: python -u -m pipeline.build --days 30
+        timeout-minutes: 80
+        continue-on-error: true
       - name: Strength at each minute
         run: python -u -m pipeline.at_minute --days 30
+        timeout-minutes: 60
+        continue-on-error: true
       - name: Partners and match-ups
         run: python -u -m pipeline.hero_pairs --days 30
+        timeout-minutes: 60
+        continue-on-error: true
       - name: Items
         run: python -u -m pipeline.items --days 30
+        timeout-minutes: 110
+        continue-on-error: true
 
       - name: Drop day caches older than 40 days
         if: always()

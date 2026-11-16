@@ -40,8 +40,8 @@ export interface Priors {
   models?: string[];                        // exported model files, e.g. "win_model_stream"
 }
 
-export const MAX_MINUTE = 45;
-const SNAPSHOT_S = [180, 360, 540, 720, 900, 1200, 1500, 1800, 2100, 2400, 2700];
+export const MAX_MINUTE = 60;      // the model's grid (pipeline/win_factors_sql.py MAX_S)
+const SNAPSHOT_S = [180, 360, 540, 720, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3300, 3600];
 // objective ids = bit positions in the live objectives mask
 const KIND: Record<number, "guardians" | "walkers" | "base_guardians" | "shrines"> = {
   1: "guardians", 2: "guardians", 3: "guardians", 4: "guardians",
@@ -129,7 +129,7 @@ export function isRanked(m: { match_mode: number | string }): boolean {
   return m.match_mode === 4 || m.match_mode === "Ranked";
 }
 
-/** One row per full game minute before the match ended (up to minute 45). */
+/** One row per full game minute before the match ended (up to MAX_MINUTE). */
 export function matchRows(m: ApiMatch, priors: Priors, history: Row = {}): BuiltPoint[] {
   const dur = m.duration_s;
   const players = m.players.map((p) => ({

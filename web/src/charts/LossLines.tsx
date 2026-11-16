@@ -47,7 +47,7 @@ export function LossLines({ series, height = 280, format, reference, highlightX,
                 <text x={m.l - 6} y={y(t)} dy="0.32em" textAnchor="end">{format(t)}</text>
               </g>
             ))}
-            {[10, 20, 30, 40].filter((t) => t <= Math.max(...xs) + 2).map((t) => (
+            {[10, 20, 30, 40, 50, 60].filter((t) => t <= Math.max(...xs) + 2).map((t) => (
               <text key={t} x={x(t)} y={H - m.b + 16} textAnchor="middle">{t}m</text>
             ))}
             <text x={W - m.r} y={H - 2} textAnchor="end">game minute</text>

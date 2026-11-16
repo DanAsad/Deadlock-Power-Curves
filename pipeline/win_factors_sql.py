@@ -10,7 +10,7 @@ Leakage rules (see README, Phase 2):
   * rank is the *initial* (pre-match) rank
 
 Time grid: the snapshot minutes for every match, and every full minute from
-1:00 to 45:00 for a 1-in-5 sample of matches (enough to train and test a model
+1:00 to 60:00 (MAX_S) for a 1-in-5 sample of matches (enough to train and test a model
 at any minute, at half the cost of doing it for all).
 The lake snapshots player stats every 3 min to 15:00, then every 5 min, so:
   * at a snapshot minute the stats are exact
@@ -24,8 +24,11 @@ Objectives, deaths, respawn timers and abandons come from event times, so they
 are exact at every minute.
 """
 
-# Snapshot times present in the lake: every 3 min to 15:00, then every 5 min.
-SNAPSHOT_S = [180, 360, 540, 720, 900, 1200, 1500, 1800, 2100, 2400, 2700]
+# Snapshot times present in the lake: every 3 min to 15:00, then every 5 min to the end of the game.
+# The model's grid ends at minute 60 (99% of games end by then; it was 45 until 2026-11-16,
+# which left the last part of about 1 game in 6 without a line).
+MAX_S = 3600
+SNAPSHOT_S = [180, 360, 540, 720, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3300, 3600]
 STAT_COLS = ["nw", "kills", "lvl", "lh", "dn", "dmg", "bd", "gdl"]
 
 
@@ -98,7 +101,7 @@ at_t AS (           -- the snapshot is valid for every kept minute in [its time,
     SELECT * FROM (
         SELECT s.match_id, p.team, s.nw, s.kills, s.lvl, s.lh, s.dn, s.dmg, s.bd, s.gdl,
                unnest(generate_series(((s.t + 59) // 60) * 60,
-                                      least(coalesce(s.t1, 2701) - 1, 2700, s.duration_s - 1), 60)) AS t
+                                      least(coalesce(s.t1, {max_s} + 1) - 1, {max_s}, s.duration_s - 1), 60)) AS t
         FROM seg s JOIN players p USING (match_id, hero_id))
     WHERE t >= 60 AND (match_id % {mod} = {rem} OR t IN ({snapshots}))
 ),

@@ -86,11 +86,11 @@ FINAL_AFTER_DAYS = 2
 HISTORY_DAYS = 30           # player, hero-experience and draft-prior look-back
 KEEP_CACHE_DAYS = 45        # cache files older than this are deleted
 EXPERIENCE_CAP = 50
-SNAP_MIN = [3, 6, 9, 12, 15, 20, 25, 30, 35, 40, 45]     # minutes with exact stats snapshots
+SNAP_MIN = [3, 6, 9, 12, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]     # minutes with exact stats snapshots
 LIST_COLS = ["heroes0", "heroes1", "accounts0", "accounts1"]
 FLAGS = ["low_pri", "new_player", "wide_party"]           # match-level queue flags (context, not factors)
 EXTRA_COLS = {"total_souls", *FLAGS}                      # not factors, but used by the unified model
-CACHE_VERSION = "wf3"       # bump when the day query changes meaning; older wf_ files are refetched
+CACHE_VERSION = "wf4"       # bump when the day query changes meaning; older wf_ files are refetched
 MINUTE_SAMPLE = (5, 2)      # matches with match_id % 5 == 2 can be loaded at every minute
 FORM_PRIOR, FARM_PRIOR, MASTERY_PRIOR = 20, 5, 10         # pseudo-games pulling player stats to the average
 PAIR_PRIOR = 2000           # pseudo-games pulling hero-pair effects to zero
@@ -151,7 +151,7 @@ def fetch_days(days: int, refresh: bool = False, every_minute: bool = False, new
     ph_<day> (games, wins, souls/min per player and hero) and hp_<day> (hero pairs)."""
     from pipeline.extract import MIN_DURATION_S, _rank_sql
     from pipeline.win_factors_sql import (DAY_SQL, HERO_PAIR_SQL, HISTORY_RAW_SQL, OBJECTIVE_KIND,
-                                          PLAYER_HERO_SQL, RAW_DAY, RAW_SQL, SGN, SNAPSHOT_S)
+                                          PLAYER_HERO_SQL, RAW_DAY, RAW_SQL, SGN, SNAPSHOT_S, MAX_S)
 
     CACHE.mkdir(parents=True, exist_ok=True)
     today = datetime.now(timezone.utc).date()
@@ -168,7 +168,7 @@ def fetch_days(days: int, refresh: bool = False, every_minute: bool = False, new
             continue
         when = dict(where=RAW_DAY.format(day=d, next_day=d + timedelta(days=1)), min_duration=MIN_DURATION_S)
         sql = DAY_SQL.format(snapshots=",".join(map(str, SNAPSHOT_S)), mod=MINUTE_SAMPLE[0], rem=MINUTE_SAMPLE[1],
-                             kind=OBJECTIVE_KIND, rank=_rank_sql(), sgn=SGN)
+                             kind=OBJECTIVE_KIND, rank=_rank_sql(), sgn=SGN, max_s=MAX_S)
         t0 = time.time()
         # 1) download the day into a local table (the part that can stall), 2) compute locally
         n_raw = _query(con, lambda c, w=when: c.execute(
@@ -435,10 +435,11 @@ def make_demo(n_matches: int = 30_000, seed: int = 3) -> pd.DataFrame:
 # Model
 # ---------------------------------------------------------------------------
 def logit_fit(X: np.ndarray, y: np.ndarray, ridge: float = 1e-3, iters: int = 50):
-    """Logistic regression by Newton-Raphson. X includes an intercept column.
-    Returns coefficients and standard errors (from the inverse Hessian)."""
+    """Logistic regression by Newton-Raphson. X includes an intercept column; `ridge` is one
+    L2 penalty for every coefficient or one per column. Returns coefficients and standard
+    errors (from the inverse Hessian)."""
     beta = np.zeros(X.shape[1])
-    pen = np.full(X.shape[1], ridge); pen[0] = 0
+    pen = np.broadcast_to(np.asarray(ridge, float), X.shape[1]).copy(); pen[0] = 0
     for _ in range(iters):
         p = 1 / (1 + np.exp(-np.clip(X @ beta, -30, 30)))
         w = p * (1 - p)

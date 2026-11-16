@@ -117,7 +117,7 @@ export function LiveGames() {
         <span aria-hidden>ⓘ</span>
         <span>
           <b>What the list uses.</b> The list only has team souls, objectives, heroes and leavers, so its win
-          chances come from the <b>live model</b>, which picks the winner about 72% of the time across a game and
+          chances come from the <b>live model</b>, which picks the winner about 73% of the time across a game and
           treats every player as average. Game time is estimated: the list gives when a match was created, and the
           in-game clock starts about 2 minutes later. <b>Tracking a match</b> reads its live broadcast instead: exact
           clock, every player's current stats, and a fuller model. The list is the 200 most-watched games the

@@ -27,9 +27,9 @@ Not affiliated with Valve.
 | | |
 |---|---|
 | Matches analysed (power curves, 30 days) | **5.6 million** (matches where someone left are excluded) |
-| Win model trained on / tested on | 1.7M matches / 169k matches from a later day it never saw |
-| Winner picked correctly | **65%** at minute 3 · **73%** at minute 15 · **82%** at minute 30 |
-| Calibration error | **0.15%**: when the model says 70%, that side wins about 70% of the time |
+| Win model trained on / tested on | 2.0M matches / 167k matches from a later day it never saw |
+| Winner picked correctly | **65%** at minute 3 · **72%** at minute 15 · **82%** at minute 30 · **72%** at minute 60 |
+| Calibration error | **0.16%**: when the model says 70%, that side wins about 70% of the time |
 | Biggest pre-game factors | the draft (hero strength, pairs that work together, counters) and the players' 30-day history |
 | Browser vs Python | the in-browser model matches the Python pipeline to 5 decimal places |
 
@@ -267,7 +267,8 @@ split by purchase minute.
 `pipeline/win_factors.py` builds one row per match per game minute, with each
 factor as a team difference known at that time. Stats snapshots exist every 3
 minutes to 15:00 and every 5 after; every match gets a row at those minutes,
-and a 1-in-5 sample of matches gets a row at every minute from 1 to 45.
+and a 1-in-5 sample of matches gets a row at every minute from 1 to 60 (about 1 match
+in 100 runs longer; its line stops at minute 60).
 
 - **Economy:** souls, hero levels, last hits, denies, soul-lead momentum
   (change between the two latest snapshots, per 5 min), carry concentration
@@ -312,11 +313,19 @@ This is the first step toward Phase 2: the same rows are the training data.
 `python -m pipeline.evaluate --days 10` measures the team prediction on matches
 it never saw, written to `data/model_eval.json` and shown on the Model check page.
 
-Latest run (15 Nov 2026): trained on 9 days to 13 Nov (1.7M matches), tested on
-168,562 matches from 14 Nov. Winner picked 65.5% at minute 3, 72.6% at 15,
-82.1% at 30 and 73.7% across the game; calibration error 0.15%. The random-split
-check agrees (73.6%, 0.16%). A ranked-only model was retested and again gave no
-gain (log loss 0.5236 vs 0.5235 for the shared model).
+Latest run (16 Nov 2026, minutes 1 to 60): trained on 9 days to 14 Nov (2.0M matches), tested on
+166,944 matches from 15 Nov. Winner picked 65.2% at minute 3, 72.4% at 15,
+81.9% at 30, 79.1% at 45, 72.3% at 60 and 73.6% across the game; calibration error 0.16%.
+Late minutes have far fewer matches to learn from: calibration error stays under
+0.7% to minute 45, then rises to 1.2% at minute 50 and 2.6% at minute 60. The
+random-split check agrees (73.7%, 0.19%). A ranked-only model was retested and
+again gave no gain (log loss 0.5248 vs 0.5240 for the shared model).
+
+The per-minute linear weights now have a weak prior (penalty w²/2 per raw unit,
+`model.RAW_PRIOR`). Without it, a rare event whose few training rows all won got
+a near-infinite weight: about 11 log-odds per ranked shrine at minutes 16 to 18,
+which showed as a one-minute drop to 0.02% in match 137934907. With it the largest
+weight is an enemy leaver (about 2.6), and log loss is unchanged (0.5102 vs 0.5105).
 
 - **Splits, both by match:** newest day held out (train on the earlier days,
   like a live system) and a random 20% of matches.
@@ -409,21 +418,21 @@ loss, lower is better.
   The shared model already takes the queue as an input and has separate
   linear weights per queue, so it stays the only full model.
 - **Step 5, every minute.** Training on a row per minute instead of only the
-  snapshot minutes lowers log loss between snapshots by 0.012 (95% CI 0.011 to
-  0.013). The model is told how old the stats are.
+  snapshot minutes lowers log loss between snapshots by 0.013 (95% CI 0.012 to
+  0.014). The model is told how old the stats are.
 - **Live API check.** `https://api.deadlock-api.com/v1/matches/active` exposes
   team souls, objective masks, heroes, account ids, abandons, start time and
   queue while a game runs, but no kills, deaths or per-player stats. So two
   models are saved: `data/model/win_model.joblib` (all factors, for finished
-  matches) and `win_model_live.joblib` (live fields only; 72.4% vs 73.5%
+  matches) and `win_model_live.joblib` (live fields only; 72.6% vs 73.6%
   accuracy over all snapshot minutes).
 - **Live broadcast check.** The API's live broadcast query
   (`/v1/matches/demo/live/query`) works for any match in progress, by id, and
   carries current per-player stats and objective state. A third model,
   `win_model_stream.joblib`, uses everything the full model does except the
   fields the broadcast lacks or counts differently (souls lost on death, total
-  time dead, Mid-Boss claims, last hits, rank gap): 73.4% accuracy and log loss 0.514 over all
-  snapshot minutes, against 73.5% and 0.511 for the full model.
+  time dead, Mid-Boss claims, last hits, rank gap): 73.5% accuracy and log loss 0.513 over all
+  snapshot minutes, against 73.6% and 0.510 for the full model.
 
 ## Win probability
 

@@ -30,7 +30,8 @@ from pipeline.build import KEYS, expand_slices
 from pipeline.extract import MIN_DURATION_S, _rank_sql, assign_period
 from pipeline.stats import Z95
 from pipeline.win_factors import CACHE, FINAL_AFTER_DAYS, _query, _save
-from pipeline.win_factors_sql import SNAPSHOT_S
+# the hero pages' minute curves keep the 3-45 grid (the win model's grid goes on to 60)
+SNAPSHOT_S = [180, 360, 540, 720, 900, 1200, 1500, 1800, 2100, 2400, 2700]
 
 VERSION = "am2"          # am2: leaver flag
 MEMORY_LIMIT = "6GB"

@@ -2,7 +2,7 @@
 // the model's rows (features.ts) and runs the exported models (model.ts).
 // Used for live games everywhere, and for match lookups on the static site.
 import { apiGet } from "../api";
-import { isRanked, isScorable, liveRow, lostObjectives, matchEvents, matchRows, type ActiveMatch, type ApiMatch, type Priors } from "./features";
+import { MAX_MINUTE, isRanked, isScorable, liveRow, lostObjectives, matchEvents, matchRows, type ActiveMatch, type ApiMatch, type Priors } from "./features";
 import { playerHistory } from "./history";
 import { predict, type WebModel } from "./model";
 
@@ -50,10 +50,10 @@ export async function scoreMatch(matchId: string) {
     start.getTime() / 1000, priors).catch(() => ({ row: {}, loaded: 0, players: m.players.length }));
   const winner = m.winning_team === 0 || m.winning_team === "Team0" ? 0 : 1;
   return {
-    max_minute: 45,
+    max_minute: MAX_MINUTE,
     match: {
       match_id: Number(matchId), label: "", blurb: "", start_time: start.toISOString(), duration_s: m.duration_s,
-      queue: isRanked(m) ? "Ranked" : "Unranked", average_badge: null, winner, truncated: m.duration_s > 45 * 60 + 59,
+      queue: isRanked(m) ? "Ranked" : "Unranked", average_badge: null, winner, truncated: m.duration_s > MAX_MINUTE * 60 + 59,
       lowest_winner_chance: null, history_players: history.loaded,
       players: m.players.map((p) => ({ team: p.team === 0 ? 0 : 1, hero_id: p.hero_id, kills: p.kills, deaths: p.deaths, net_worth: p.net_worth }))
         .sort((a, b) => b.net_worth - a.net_worth),
